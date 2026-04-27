@@ -1,4 +1,8 @@
-import { Mic2, FileText, BookMarked, Users, Globe, ShieldCheck } from 'lucide-react'
+import {
+  Mic2, FileText, BookMarked, Users, Globe, ShieldCheck,
+  Smartphone, Cpu, GraduationCap, Lightbulb,
+  Mail, MapPin, ExternalLink, Award,
+} from 'lucide-react'
 
 const CDN = 'https://cdn.unimagdalena.edu.co/images'
 
@@ -33,6 +37,19 @@ const features = [
     title: 'Patrimonio protegido',
     desc: 'Las lenguas y sus datos son tratados con protocolos de soberanía cultural indígena.',
   },
+]
+
+const researchLines = [
+  { icon: <Smartphone size={18} />, label: 'Aplicaciones Móviles' },
+  { icon: <Cpu size={18} />, label: 'Desarrollo Electrónico' },
+  { icon: <GraduationCap size={18} />, label: 'Docencia en Telecomunicaciones' },
+  { icon: <Lightbulb size={18} />, label: 'Gestión e Innovación Tecnológica' },
+]
+
+const objectives = [
+  'Fomentar la participación de nuevos integrantes de la comunidad académica Unimagdalena dentro del grupo, especialmente nuevos investigadores en proceso de formación.',
+  'Generar productos de nuevo conocimiento que satisfagan requerimientos de la industria y la región en el ámbito de las telecomunicaciones y desarrollo de aplicaciones móviles, complementando los centros de investigación en el campo de la ingeniería electrónica.',
+  'Afianzar alianzas con entidades del estado y del sector productivo para desarrollar proyectos de I+D+I en telecomunicaciones que solucionen necesidades de la comunidad científica, académica y la sociedad, comprometidos con el desarrollo sostenible de la región y el país.',
 ]
 
 export default function About() {
@@ -86,9 +103,7 @@ export default function About() {
       <section className="section features-section">
         <div className="container">
           <h2 className="section-title">Capacidades del sistema</h2>
-          <p className="section-sub">
-            Tecnología al servicio de la preservación cultural.
-          </p>
+          <p className="section-sub">Tecnología al servicio de la preservación cultural.</p>
           <div className="features-grid">
             {features.map((f) => (
               <div key={f.title} className="feature-card">
@@ -103,27 +118,59 @@ export default function About() {
 
       {/* ── GIDEAM ────────────────────────────────────────────── */}
       <section className="section gideam-section">
-        <div className="container gideam-inner">
-          <div className="gideam-logo-wrap">
-            <img src="/gideam.png" alt="Grupo GIDEAM" className="gideam-logo" />
+        <div className="container">
+          <div className="gideam-header">
+            <div className="gideam-logo-wrap">
+              <img src="/gideam.png" alt="Grupo GIDEAM" className="gideam-logo" />
+            </div>
+            <div className="gideam-meta">
+              <div className="gideam-badges">
+                <span className="gideam-badge">Equipo técnico</span>
+                <span className="gideam-badge gideam-badge--award">
+                  <Award size={12} /> Categoría Colciencias: A
+                </span>
+              </div>
+              <h2 className="section-title section-title-left">Grupo GIDEAM</h2>
+              <p className="gideam-lead">
+                SAYTA es desarrollado por el{' '}
+                <strong>Grupo de Investigación en Ingeniería, Desarrollo Electrónico,
+                Aplicaciones y Multimedia (GIDEAM)</strong> de la Universidad del Magdalena.
+              </p>
+              <a
+                href="https://investigacion.unimagdalena.edu.co/unidadesOrganizativas/38"
+                target="_blank"
+                rel="noreferrer"
+                className="gideam-link"
+              >
+                <ExternalLink size={14} />
+                Ver grupo en portal de investigación
+              </a>
+            </div>
           </div>
-          <div className="gideam-text">
-            <div className="gideam-badge">Equipo técnico</div>
-            <h2 className="section-title section-title-left">Grupo GIDEAM</h2>
-            <p>
-              SAYTA es desarrollado por el <strong>Grupo de Investigación en Ingeniería de Software,
-              Desarrollo de Aplicaciones y Multimedia (GIDEAM)</strong> de la Universidad del Magdalena.
-            </p>
-            <p>
-              El grupo aporta la infraestructura técnica del proyecto: arquitectura de software, modelos de
-              procesamiento de lenguaje natural, sistemas de reconocimiento automático de voz y la
-              plataforma web que hace accesible la herramienta a cualquier usuario con conexión a internet.
-            </p>
-            <p>
-              GIDEAM trabaja en estrecha colaboración con lingüistas, hablantes nativos y autoridades
-              indígenas para garantizar que la tecnología respete y represente fielmente el patrimonio
-              lingüístico de los pueblos Arhuaco y Kogui.
-            </p>
+
+          <div className="gideam-body">
+            {/* Research lines */}
+            <div className="gideam-block">
+              <h3 className="gideam-block-title">Líneas de investigación</h3>
+              <div className="research-lines">
+                {researchLines.map((l) => (
+                  <div key={l.label} className="research-line">
+                    <span className="research-line-icon">{l.icon}</span>
+                    {l.label}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Objectives */}
+            <div className="gideam-block">
+              <h3 className="gideam-block-title">Objetivos del grupo</h3>
+              <ol className="objectives-list">
+                {objectives.map((obj, i) => (
+                  <li key={i}>{obj}</li>
+                ))}
+              </ol>
+            </div>
           </div>
         </div>
       </section>
@@ -151,6 +198,37 @@ export default function About() {
             >
               Visitar sitio oficial →
             </a>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Contact ───────────────────────────────────────────── */}
+      <section className="section contact-section">
+        <div className="container">
+          <h2 className="section-title">Contacto</h2>
+          <p className="section-sub">¿Tienes preguntas sobre SAYTA? Escríbenos.</p>
+          <div className="contact-cards">
+            <a href="mailto:sayta@unimagdalena.edu.co" className="contact-card">
+              <div className="contact-card-icon">
+                <Mail size={22} />
+              </div>
+              <div>
+                <span className="contact-card-label">Correo electrónico</span>
+                <span className="contact-card-value">sayta@unimagdalena.edu.co</span>
+              </div>
+            </a>
+            <div className="contact-card">
+              <div className="contact-card-icon">
+                <MapPin size={22} />
+              </div>
+              <div>
+                <span className="contact-card-label">Dirección</span>
+                <span className="contact-card-value">
+                  Calle 29H3 No 22-01, Santa Marta D.T.C.H.<br />
+                  Colombia · Código Postal 470004
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </section>
