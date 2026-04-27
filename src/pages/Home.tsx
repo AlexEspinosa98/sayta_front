@@ -1,37 +1,29 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useId } from 'react'
 import {
-  Mic,
-  MicOff,
-  Upload,
-  Languages,
-  ArrowRightLeft,
-  Loader2,
-  Volume2,
-  Copy,
-  Check,
-  ChevronDown,
+  Mic, MicOff, Upload, Languages,
+  ArrowRightLeft, Loader2, Volume2, Copy, Check,
 } from 'lucide-react'
 
 type Language = 'arhuaco' | 'kogui'
 type InputMode = 'text' | 'audio'
 
-const LANG_LABELS: Record<Language, string> = {
-  arhuaco: 'Arhuaco',
-  kogui: 'Kogui',
-}
+const LANG_LABELS: Record<Language, string> = { arhuaco: 'Arhuaco', kogui: 'Kogui' }
 
 export default function Home() {
-  const [language, setLanguage] = useState<Language>('arhuaco')
-  const [inputMode, setInputMode] = useState<InputMode>('text')
-  const [inputText, setInputText] = useState('')
-  const [audioFile, setAudioFile] = useState<File | null>(null)
-  const [result, setResult] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
+  const [language, setLanguage]     = useState<Language>('arhuaco')
+  const [inputMode, setInputMode]   = useState<InputMode>('text')
+  const [inputText, setInputText]   = useState('')
+  const [audioFile, setAudioFile]   = useState<File | null>(null)
+  const [result, setResult]         = useState('')
+  const [isLoading, setIsLoading]   = useState(false)
   const [isRecording, setIsRecording] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied]         = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const textareaId   = useId()
+  const resultId     = useId()
 
-  const canTranslate = inputMode === 'text' ? inputText.trim().length > 0 : audioFile !== null || isRecording
+  const canTranslate =
+    inputMode === 'text' ? inputText.trim().length > 0 : audioFile !== null || isRecording
 
   const handleTranslate = async () => {
     if (!canTranslate) return
@@ -60,164 +52,196 @@ export default function Home() {
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] ?? null
-    setAudioFile(file)
+    setAudioFile(e.target.files?.[0] ?? null)
     setIsRecording(false)
   }
 
   return (
-    <>
-      {/* ── Hero + Translator ─────────────────────────────────── */}
-      <section className="hero">
-        <div className="hero-bg" aria-hidden="true" />
-        <div className="hero-content">
-          <div className="hero-eyebrow">
-            <Languages size={14} />
-            Sistema de Audio y Traducción Ancestral
-          </div>
-          <h1 className="hero-title">
-            <span className="hero-title-accent">SAYTA</span>
+    <section className="translator-page" aria-labelledby="translator-heading">
+      <div className="translator-page-inner">
+
+        <header className="translator-page-header">
+          <h1 id="translator-heading" className="tp-title">
+            <span aria-hidden="true"><Languages size={28} /></span>
+            Traductor SAYTA
           </h1>
-          <p className="hero-desc">
-            Traduce lenguas indígenas de la Sierra Nevada —<br />
-            Arhuaco y Kogui al español, por texto o audio.
-          </p>
-        </div>
+          <p className="tp-subtitle">Arhuaco · Kogui → Español</p>
+        </header>
 
-        {/* Translator card */}
-        <div className="translator-card">
-          {/* Language + mode row */}
+        <div className="tc" role="region" aria-label="Panel de traducción">
+
+          {/* ── Fila superior: lengua + modo ───────────────── */}
           <div className="tc-top">
-            <div className="lang-selector">
-              {(['arhuaco', 'kogui'] as Language[]).map((l) => (
-                <button
-                  key={l}
-                  className={`lang-pill ${language === l ? 'lang-pill-active' : ''}`}
-                  onClick={() => setLanguage(l)}
-                >
-                  {LANG_LABELS[l]}
-                </button>
-              ))}
-              <div className="lang-arrow">
-                <ArrowRightLeft size={14} />
-                <span>Español</span>
-              </div>
-            </div>
 
-            <div className="mode-pills">
-              <button
-                className={`mode-pill ${inputMode === 'text' ? 'mode-pill-active' : ''}`}
-                onClick={() => setInputMode('text')}
-              >
-                <Languages size={14} />
-                Texto
-              </button>
-              <button
-                className={`mode-pill ${inputMode === 'audio' ? 'mode-pill-active' : ''}`}
-                onClick={() => setInputMode('audio')}
-              >
-                <Mic size={14} />
-                Audio
-              </button>
-            </div>
+            {/* Selector de lengua */}
+            <fieldset className="tc-fieldset">
+              <legend className="tc-legend">Lengua de origen</legend>
+              <div className="lang-selector" role="group">
+                {(['arhuaco', 'kogui'] as Language[]).map((l) => (
+                  <button
+                    key={l}
+                    type="button"
+                    className={`lang-pill ${language === l ? 'lang-pill-active' : ''}`}
+                    aria-pressed={language === l}
+                    onClick={() => setLanguage(l)}
+                  >
+                    {LANG_LABELS[l]}
+                  </button>
+                ))}
+                <span className="lang-arrow" aria-hidden="true">
+                  <ArrowRightLeft size={14} />
+                  Español
+                </span>
+              </div>
+            </fieldset>
+
+            {/* Modo de entrada */}
+            <fieldset className="tc-fieldset">
+              <legend className="tc-legend">Modo de entrada</legend>
+              <div className="mode-pills" role="group">
+                <button
+                  type="button"
+                  className={`mode-pill ${inputMode === 'text' ? 'mode-pill-active' : ''}`}
+                  aria-pressed={inputMode === 'text'}
+                  onClick={() => setInputMode('text')}
+                >
+                  <Languages size={14} aria-hidden="true" />
+                  Texto
+                </button>
+                <button
+                  type="button"
+                  className={`mode-pill ${inputMode === 'audio' ? 'mode-pill-active' : ''}`}
+                  aria-pressed={inputMode === 'audio'}
+                  onClick={() => setInputMode('audio')}
+                >
+                  <Mic size={14} aria-hidden="true" />
+                  Audio
+                </button>
+              </div>
+            </fieldset>
+
           </div>
 
-          {/* Input */}
+          {/* ── Área de entrada ────────────────────────────── */}
           {inputMode === 'text' ? (
             <div className="tc-input-wrap">
+              <label htmlFor={textareaId} className="tc-label">
+                Texto en {LANG_LABELS[language]}
+              </label>
               <textarea
+                id={textareaId}
                 className="tc-textarea"
                 placeholder={`Escribe en ${LANG_LABELS[language]}…`}
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
-                rows={4}
+                rows={5}
+                aria-required="true"
+                aria-describedby={result ? resultId : undefined}
               />
-              <span className="tc-char-count">{inputText.length}</span>
+              <span className="tc-char-count" aria-live="polite" aria-atomic="true">
+                {inputText.length} {inputText.length === 1 ? 'carácter' : 'caracteres'}
+              </span>
             </div>
           ) : (
-            <div className="tc-audio">
+            <div className="tc-audio" role="group" aria-label="Entrada de audio">
               <button
+                type="button"
                 className={`audio-record-btn ${isRecording ? 'audio-record-btn--active' : ''}`}
+                aria-pressed={isRecording}
+                aria-label={isRecording ? 'Detener grabación' : 'Iniciar grabación de voz'}
                 onClick={handleRecordToggle}
               >
-                {isRecording ? <MicOff size={20} /> : <Mic size={20} />}
-                {isRecording ? 'Detener' : 'Grabar'}
-                {isRecording && <span className="rec-dot" />}
+                {isRecording
+                  ? <><MicOff size={20} aria-hidden="true" /> Detener <span className="rec-dot" aria-hidden="true" /></>
+                  : <><Mic size={20} aria-hidden="true" /> Grabar</>
+                }
               </button>
-              <span className="audio-or">o</span>
-              <button className="audio-upload-btn" onClick={() => fileInputRef.current?.click()}>
-                <Upload size={16} />
+
+              <span className="audio-or" aria-hidden="true">o</span>
+
+              <button
+                type="button"
+                className="audio-upload-btn"
+                onClick={() => fileInputRef.current?.click()}
+                aria-label="Subir archivo de audio"
+              >
+                <Upload size={16} aria-hidden="true" />
                 Subir archivo
               </button>
-              <input ref={fileInputRef} type="file" accept="audio/*" hidden onChange={handleFileChange} />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="audio/*"
+                aria-label="Seleccionar archivo de audio"
+                className="visually-hidden"
+                onChange={handleFileChange}
+              />
+
               {audioFile && (
-                <span className="audio-file-tag">
-                  <Volume2 size={12} />
-                  {audioFile.name}
+                <span className="audio-file-tag" role="status">
+                  <Volume2 size={12} aria-hidden="true" />
+                  <span className="truncate">{audioFile.name}</span>
                 </span>
               )}
             </div>
           )}
 
-          {/* Translate button */}
-          <button className="translate-btn" onClick={handleTranslate} disabled={isLoading || !canTranslate}>
-            {isLoading ? <Loader2 size={18} className="spin" /> : <Languages size={18} />}
-            {isLoading ? 'Traduciendo…' : 'Traducir'}
+          {/* ── Botón traducir ─────────────────────────────── */}
+          <button
+            type="button"
+            className="translate-btn"
+            onClick={handleTranslate}
+            disabled={isLoading || !canTranslate}
+            aria-busy={isLoading}
+            aria-disabled={!canTranslate}
+          >
+            {isLoading
+              ? <><Loader2 size={18} className="spin" aria-hidden="true" /> Traduciendo…</>
+              : <><Languages size={18} aria-hidden="true" /> Traducir</>
+            }
           </button>
 
-          {/* Result */}
-          {result && !isLoading && (
-            <div className="tc-result">
-              <div className="tc-result-header">
-                <span className="tc-result-label">Español</span>
-                <button className="copy-btn" onClick={handleCopy} title="Copiar">
-                  {copied ? <Check size={14} /> : <Copy size={14} />}
-                  {copied ? 'Copiado' : 'Copiar'}
-                </button>
+          {/* ── Resultado ──────────────────────────────────── */}
+          <div
+            id={resultId}
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            aria-label="Resultado de la traducción"
+          >
+            {isLoading && (
+              <div className="tc-result tc-result--loading">
+                <Loader2 size={20} className="spin" aria-hidden="true" />
+                <span>Procesando traducción…</span>
               </div>
-              <p className="tc-result-text">{result}</p>
-            </div>
-          )}
-          {isLoading && (
-            <div className="tc-result tc-result--loading">
-              <Loader2 size={20} className="spin" />
-              <span>Procesando traducción…</span>
-            </div>
-          )}
-        </div>
-
-        <a href="#lenguas" className="hero-scroll-hint" aria-label="Ver más">
-          <ChevronDown size={20} />
-        </a>
-      </section>
-
-      {/* ── Languages ─────────────────────────────────────────── */}
-      <section id="lenguas" className="section lang-section">
-        <div className="container">
-          <h2 className="section-title">Lenguas disponibles</h2>
-          <p className="section-sub">
-            Dos de las lenguas indígenas más importantes de la Sierra Nevada de Santa Marta.
-          </p>
-          <div className="lang-cards">
-            <div className="lang-card">
-              <div className="lang-card-badge">Familia Chibcha</div>
-              <h3>Arhuaco <span className="lang-card-native">Ika</span></h3>
-              <p>
-                Hablado por el pueblo Arhuaco en las laderas de la Sierra Nevada. Cuenta con aproximadamente
-                14.000 hablantes activos.
-              </p>
-            </div>
-            <div className="lang-card">
-              <div className="lang-card-badge">Familia Chibcha</div>
-              <h3>Kogui <span className="lang-card-native">Kággaba</span></h3>
-              <p>
-                Lengua del pueblo Kogui, guardianes ancestrales de la Sierra Nevada, con alrededor de
-                10.000 hablantes.
-              </p>
-            </div>
+            )}
+            {result && !isLoading && (
+              <div className="tc-result">
+                <div className="tc-result-header">
+                  <span className="tc-result-label" id={`${resultId}-label`}>
+                    Traducción al Español
+                  </span>
+                  <button
+                    type="button"
+                    className="copy-btn"
+                    onClick={handleCopy}
+                    aria-label={copied ? 'Texto copiado al portapapeles' : 'Copiar traducción'}
+                  >
+                    {copied
+                      ? <><Check size={14} aria-hidden="true" /> Copiado</>
+                      : <><Copy size={14} aria-hidden="true" /> Copiar</>
+                    }
+                  </button>
+                </div>
+                <p className="tc-result-text" aria-labelledby={`${resultId}-label`}>
+                  {result}
+                </p>
+              </div>
+            )}
           </div>
+
         </div>
-      </section>
-    </>
+      </div>
+    </section>
   )
 }
