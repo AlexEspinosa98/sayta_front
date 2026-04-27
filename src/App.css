@@ -27,7 +27,7 @@
   display: flex; align-items: center; gap: 8px;
   text-decoration: none; color: var(--white);
 }
-.logo-sayta { height: 34px; width: auto; object-fit: contain; filter: brightness(0) invert(1); }
+.logo-sayta { height: 34px; width: auto; object-fit: contain; border-radius: 5px; }
 .header-sayta-name { font-size: .95rem; font-weight: 800; letter-spacing: .06em; color: var(--white); }
 
 /* Nav */
@@ -286,7 +286,7 @@
 .about-intro-text strong { color: var(--blue); font-weight: 700; }
 .about-intro-logo { display: flex; flex-direction: column; align-items: center; gap: 24px; }
 .about-uni-logo { width: 120px; height: auto; }
-.about-sayta-logo { width: 90px; height: auto; }
+.about-sayta-logo { width: 90px; height: auto; border-radius: 8px; }
 
 /* ══════════════════════════════════════════
    FEATURES GRID
@@ -338,9 +338,32 @@
 .footer-inner { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; }
 .footer-logos { display: flex; align-items: center; gap: 20px; }
 .footer-logo { height: 42px; width: auto; object-fit: contain; opacity: .85; }
-.footer-logo-sayta { height: 32px; filter: brightness(0) invert(1); }
+.footer-logo-sayta { height: 36px; filter: none; border-radius: 6px; }
 .footer-text { font-size: .84rem; color: rgba(255,255,255,.65); font-weight: 500; }
 .footer-subtext { font-size: .76rem; color: rgba(255,255,255,.35); }
+
+/* ══════════════════════════════════════════
+   GIDEAM SECTION
+══════════════════════════════════════════ */
+.gideam-section { background: var(--white); }
+.gideam-inner {
+  display: grid; grid-template-columns: auto 1fr; gap: 56px; align-items: center;
+}
+.gideam-logo-wrap {
+  flex-shrink: 0;
+  background: var(--off-white); border: 1px solid var(--gray-200);
+  border-radius: var(--r); padding: 24px; display: flex; align-items: center; justify-content: center;
+}
+.gideam-logo { width: 180px; height: auto; object-fit: contain; }
+.gideam-badge {
+  display: inline-block; font-size: .72rem; font-weight: 800; letter-spacing: .1em;
+  text-transform: uppercase; background: var(--red-light); color: var(--red);
+  padding: 4px 12px; border-radius: 999px; margin-bottom: 12px;
+}
+.gideam-text { display: flex; flex-direction: column; gap: 14px; }
+.gideam-text .section-title { margin-bottom: 4px; }
+.gideam-text p { font-size: .95rem; color: var(--gray-700); line-height: 1.75; }
+.gideam-text strong { color: var(--blue); font-weight: 700; }
 
 /* ══════════════════════════════════════════
    RESPONSIVE
@@ -354,4 +377,6 @@
   .tc-top { flex-direction: column; align-items: flex-start; }
   .about-intro { grid-template-columns: 1fr; }
   .about-intro-logo { flex-direction: row; }
+  .gideam-inner { grid-template-columns: 1fr; }
+  .gideam-logo { width: 140px; }
 }

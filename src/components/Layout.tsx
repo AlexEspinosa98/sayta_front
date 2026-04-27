@@ -18,7 +18,7 @@ export default function Layout() {
             </a>
             <div className="logo-divider" />
             <NavLink to="/" className="header-sayta-link">
-              <img src="/SAYTA-LOGO.svg" alt="SAYTA" className="logo-sayta" />
+              <img src="/SAYTA LOGO.jpg" alt="SAYTA" className="logo-sayta" />
               <span className="header-sayta-name">SAYTA</span>
             </NavLink>
           </div>
@@ -44,7 +44,7 @@ export default function Layout() {
           <div className="footer-logos">
             <img src={`${CDN}/escudo/bg_dark/128.png`} alt="Unimagdalena" className="footer-logo" />
             <img src={`${CDN}/acreditacion/blue/128.png`} alt="Alta Calidad" className="footer-logo" />
-            <img src="/SAYTA-LOGO.svg" alt="SAYTA" className="footer-logo footer-logo-sayta" />
+            <img src="/SAYTA LOGO.jpg" alt="SAYTA" className="footer-logo footer-logo-sayta" />
           </div>
           <p className="footer-text">
             © {new Date().getFullYear()} Universidad del Magdalena · SAYTA – Sistema de Audio y Traducción Ancestral

@@ -76,12 +76,11 @@ export default function Home() {
             Sistema de Audio y Traducción Ancestral
           </div>
           <h1 className="hero-title">
-            Traduce lenguas
-            <br />
-            <span className="hero-title-accent">ancestrales</span>
+            <span className="hero-title-accent">SAYTA</span>
           </h1>
           <p className="hero-desc">
-            Arhuaco y Kogui al español — texto o audio.
+            Traduce lenguas indígenas de la Sierra Nevada —<br />
+            Arhuaco y Kogui al español, por texto o audio.
           </p>
         </div>
 

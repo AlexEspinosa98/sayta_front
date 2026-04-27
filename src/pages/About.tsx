@@ -77,7 +77,7 @@ export default function About() {
               alt="Universidad del Magdalena"
               className="about-uni-logo"
             />
-            <img src="/SAYTA-LOGO.svg" alt="SAYTA" className="about-sayta-logo" />
+            <img src="/SAYTA LOGO.jpg" alt="SAYTA" className="about-sayta-logo" />
           </div>
         </div>
       </section>
@@ -97,6 +97,33 @@ export default function About() {
                 <p>{f.desc}</p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── GIDEAM ────────────────────────────────────────────── */}
+      <section className="section gideam-section">
+        <div className="container gideam-inner">
+          <div className="gideam-logo-wrap">
+            <img src="/gideam.png" alt="Grupo GIDEAM" className="gideam-logo" />
+          </div>
+          <div className="gideam-text">
+            <div className="gideam-badge">Equipo técnico</div>
+            <h2 className="section-title section-title-left">Grupo GIDEAM</h2>
+            <p>
+              SAYTA es desarrollado por el <strong>Grupo de Investigación en Ingeniería de Software,
+              Desarrollo de Aplicaciones y Multimedia (GIDEAM)</strong> de la Universidad del Magdalena.
+            </p>
+            <p>
+              El grupo aporta la infraestructura técnica del proyecto: arquitectura de software, modelos de
+              procesamiento de lenguaje natural, sistemas de reconocimiento automático de voz y la
+              plataforma web que hace accesible la herramienta a cualquier usuario con conexión a internet.
+            </p>
+            <p>
+              GIDEAM trabaja en estrecha colaboración con lingüistas, hablantes nativos y autoridades
+              indígenas para garantizar que la tecnología respete y represente fielmente el patrimonio
+              lingüístico de los pueblos Arhuaco y Kogui.
+            </p>
           </div>
         </div>
       </section>
