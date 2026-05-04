@@ -6,7 +6,7 @@ import {
   ChevronDown, Clock,
 } from 'lucide-react'
 
-const API = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+const API = (import.meta.env.VITE_API_URL as string | undefined) ?? ''
 const PASSWORD = 'Un1m4gd4l3n4'
 const SESSION_KEY = 'etiquetado_auth'
 
