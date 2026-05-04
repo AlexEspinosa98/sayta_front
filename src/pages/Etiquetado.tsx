@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   Lock, Mic, FolderOpen, BarChart2, RefreshCw, AlertCircle,
   Music, BookOpen, Tag, Check, Trash2, Edit2, X, ArrowLeft,
-  ChevronDown, Clock,
+  ChevronDown, ChevronUp, Clock,
 } from 'lucide-react'
 
 const API = (import.meta.env.VITE_API_URL as string | undefined) ?? ''
@@ -40,11 +40,6 @@ interface AudioItem {
   duracion_formateada?: string
   etiquetado: boolean
   etiqueta?: string
-}
-
-interface GlosarioFlat {
-  traduccion: string
-  espanol: string
 }
 
 interface GlosarioTermino {
@@ -327,107 +322,86 @@ function SessionList({ onSelect }: { onSelect: (community: string, session: stri
 }
 
 /* ═══════════════════════════════════════════════════════
-   LABEL COMBOBOX
-   Text input + dropdown showing glossary terms.
-   User can type freely OR click a term from the list.
-   Each option shows: traduccion (espanol)
+   GLOSSARY PANEL
+   Inline expandable panel inside AudioRow.
+   Shows all terms from the session glossary organized by
+   category. Format: traduccion (español).
+   Clicking a term fills the label input and closes the panel.
 ═══════════════════════════════════════════════════════ */
 
-function LabelCombobox({ value, onChange, onEnter, terms, disabled, inputId }: {
-  value: string
-  onChange: (v: string) => void
-  onEnter: () => void
-  terms: GlosarioFlat[]
-  disabled: boolean
-  inputId: string
+function GlossaryPanel({ categories, onSelect }: {
+  categories: GlosarioCategoria[]
+  onSelect: (traduccion: string) => void
 }) {
-  const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState('')
+  const [search, setSearch] = useState('')
+  const q = search.trim().toLowerCase()
 
-  const q = query.trim().toLowerCase()
-  const suggestions = q === ''
-    ? terms.slice(0, 40)
-    : terms.filter(t =>
-        t.traduccion.toLowerCase().includes(q) ||
-        t.espanol.toLowerCase().includes(q)
-      ).slice(0, 40)
+  const filtered = q === ''
+    ? categories
+    : categories
+        .map(cat => ({
+          ...cat,
+          terminos: cat.terminos.filter(
+            t => t.traduccion.toLowerCase().includes(q) || t.espanol.toLowerCase().includes(q)
+          ),
+        }))
+        .filter(cat => cat.terminos.length > 0)
 
-  function handleInput(e: React.ChangeEvent<HTMLInputElement>) {
-    const v = e.target.value
-    setQuery(v)
-    onChange(v)
-    setOpen(true)
-  }
-
-  function handleSelect(t: GlosarioFlat) {
-    onChange(t.traduccion)
-    setQuery('')
-    setOpen(false)
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Escape') { setOpen(false); return }
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      if (open) { setOpen(false) } else { onEnter() }
-    }
-  }
+  const totalTerms = categories.reduce((s, c) => s + c.terminos.length, 0)
 
   return (
-    <div className="eg-combobox">
-      <input
-        id={inputId}
-        type="text"
-        value={value}
-        onChange={handleInput}
-        onFocus={() => { setQuery(''); setOpen(true) }}
-        onBlur={() => setTimeout(() => setOpen(false), 160)}
-        onKeyDown={handleKeyDown}
-        placeholder={terms.length > 0 ? 'Escribir libremente o seleccionar del glosario…' : 'Escribir en lengua indígena…'}
-        className="eg-gate-input eg-label-input"
-        disabled={disabled}
-        autoComplete="off"
-        autoFocus
-        role="combobox"
-        aria-expanded={open && suggestions.length > 0}
-        aria-autocomplete="list"
-        aria-controls={`${inputId}-list`}
-      />
-      {open && suggestions.length > 0 && (
-        <ul
-          id={`${inputId}-list`}
-          className="eg-combobox-dropdown"
-          role="listbox"
-          aria-label="Términos del glosario"
-        >
-          {terms.length > 0 && q === '' && (
-            <li className="eg-combobox-header" aria-hidden="true">
-              Glosario — {terms.length} términos disponibles
-            </li>
-          )}
-          {suggestions.map((t, i) => (
-            <li key={i} role="option" aria-selected={value === t.traduccion}>
-              <button
-                type="button"
-                className={`eg-combobox-option${value === t.traduccion ? ' eg-combobox-option--active' : ''}`}
-                onMouseDown={e => { e.preventDefault(); handleSelect(t) }}
-                tabIndex={-1}
-              >
-                <span className="eg-combobox-term">{t.traduccion}</span>
-                <span className="eg-combobox-hint">({t.espanol})</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+    <div className="eg-glos-panel" role="region" aria-label="Glosario de términos">
+      <div className="eg-glos-panel-header">
+        <BookOpen size={13} aria-hidden="true" />
+        <span>Seleccionar del glosario</span>
+        <span className="eg-glos-panel-count">{totalTerms} términos · {categories.length} categorías</span>
+      </div>
+      <div className="eg-glos-panel-search">
+        <input
+          type="search"
+          placeholder="Buscar en lengua indígena o español…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="eg-gate-input"
+          aria-label="Buscar término en el glosario"
+        />
+      </div>
+      <div className="eg-glos-panel-body">
+        {filtered.length === 0 && (
+          <p className="eg-glos-panel-empty">No se encontraron términos para "{search}"</p>
+        )}
+        {filtered.map(cat => (
+          <div key={cat.nombre} className="eg-glos-cat">
+            <h4 className="eg-glos-cat-title">
+              {cat.nombre}
+              <span className="eg-glos-cat-count">{cat.terminos.length}</span>
+            </h4>
+            <ul className="eg-glos-terms" role="list">
+              {cat.terminos.map((t, i) => (
+                <li key={i}>
+                  <button
+                    type="button"
+                    className="eg-glos-term-btn"
+                    onClick={() => onSelect(t.traduccion)}
+                    title={`Seleccionar: ${t.traduccion}`}
+                  >
+                    <span className="eg-glos-term-traduccion">{t.traduccion}</span>
+                    <span className="eg-glos-term-espanol">({t.espanol})</span>
+                    {t.nota && <span className="eg-glos-term-nota">{t.nota}</span>}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
 
 /* ═══════════════════════════════════════════════════════
    GLOSSARY MODAL  (reference viewer — HU-17)
-   Kept for full context: categories, notes, metadata.
-   Not used for selection (combobox handles that).
+   Full-screen reference view with all metadata and notes.
 ═══════════════════════════════════════════════════════ */
 
 function GlossaryModal({ community, session, onClose }: {
@@ -521,18 +495,19 @@ function GlossaryModal({ community, session, onClose }: {
    AUDIO ROW  (HU-16 · HU-18 · HU-19 · HU-20)
 ═══════════════════════════════════════════════════════ */
 
-function AudioRow({ audio, community, session, onLabelChange, isExpanded, onToggle, glossaryTerms }: {
+function AudioRow({ audio, community, session, onLabelChange, isExpanded, onToggle, glossaryCategories }: {
   audio: AudioItem
   community: string
   session: string
   onLabelChange: () => void
   isExpanded: boolean
   onToggle: () => void
-  glossaryTerms: GlosarioFlat[]
+  glossaryCategories: GlosarioCategoria[]
 }) {
-  const [mode, setMode]         = useState<LabelMode>('idle')
-  const [inputVal, setInputVal] = useState(audio.etiqueta ?? '')
-  const [apiError, setApiError] = useState<string | null>(null)
+  const [mode, setMode]               = useState<LabelMode>('idle')
+  const [inputVal, setInputVal]       = useState(audio.etiqueta ?? '')
+  const [apiError, setApiError]       = useState<string | null>(null)
+  const [showGlosPanel, setShowGlosPanel] = useState(false)
 
   const audioUrl  = `${API}/api/grabaciones/${community}/${session}/audios/${encodeURIComponent(audio.nombre)}`
   const isLabeled = audio.etiquetado
@@ -540,11 +515,11 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
   const inputId   = `lbl-${audio.nombre.replace(/[^a-z0-9]/gi, '-')}`
 
   function startEdit()  { setInputVal(audio.etiqueta ?? ''); setApiError(null); setMode('editing') }
-  function cancelEdit() { setInputVal(audio.etiqueta ?? ''); setApiError(null); setMode('idle') }
+  function cancelEdit() { setInputVal(audio.etiqueta ?? ''); setApiError(null); setShowGlosPanel(false); setMode('idle') }
 
   async function handleSave() {
     if (!inputVal.trim()) return
-    setMode('saving'); setApiError(null)
+    setMode('saving'); setApiError(null); setShowGlosPanel(false)
     try {
       let res: Response
       if (isLabeled) {
@@ -625,7 +600,7 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
               <Tag size={14} aria-hidden="true" /> Etiqueta en lengua indígena
             </p>
 
-            {/* Show current label + edit/delete buttons */}
+            {/* Display mode: show label + edit/delete buttons */}
             {showDisplay && (
               <div className="eg-label-display">
                 <span className="eg-label-value">{audio.etiqueta}</span>
@@ -642,35 +617,64 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
               </div>
             )}
 
-            {/* Combobox: free text + glossary dropdown */}
+            {/* Input mode: free text + optional glossary panel */}
             {showInput && (
-              <div className="eg-label-input-row">
-                <label htmlFor={inputId} className="sr-only">Etiqueta para {audio.nombre}</label>
-                <LabelCombobox
-                  value={inputVal}
-                  onChange={setInputVal}
-                  onEnter={handleSave}
-                  terms={glossaryTerms}
-                  disabled={isBusy}
-                  inputId={inputId}
-                />
-                <div className="eg-label-input-btns">
-                  <button
-                    onClick={handleSave}
-                    disabled={isBusy || !inputVal.trim()}
-                    className="eg-btn eg-btn--primary"
-                  >
-                    {mode === 'saving'
-                      ? <><RefreshCw size={14} className="spin" aria-hidden="true" /> Guardando…</>
-                      : <><Check size={14} aria-hidden="true" /> {isLabeled ? 'Actualizar' : 'Guardar'}</>}
-                  </button>
-                  {mode === 'editing' && (
-                    <button onClick={cancelEdit} className="eg-btn eg-btn--ghost">
-                      <X size={14} aria-hidden="true" /> Cancelar
+              <>
+                <div className="eg-label-input-row">
+                  <label htmlFor={inputId} className="sr-only">Etiqueta para {audio.nombre}</label>
+                  <input
+                    id={inputId}
+                    type="text"
+                    value={inputVal}
+                    onChange={e => setInputVal(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !isBusy && inputVal.trim()) handleSave() }}
+                    placeholder="Escribir en lengua indígena…"
+                    className="eg-gate-input eg-label-input"
+                    disabled={isBusy}
+                    autoComplete="off"
+                    autoFocus
+                  />
+                  <div className="eg-label-input-btns">
+                    {glossaryCategories.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowGlosPanel(p => !p)}
+                        className={`eg-btn eg-btn--ghost${showGlosPanel ? ' eg-btn--active' : ''}`}
+                        aria-expanded={showGlosPanel}
+                        aria-label={showGlosPanel ? 'Ocultar glosario' : 'Ver glosario'}
+                      >
+                        <BookOpen size={14} aria-hidden="true" />
+                        Glosario
+                        {showGlosPanel
+                          ? <ChevronUp size={13} aria-hidden="true" />
+                          : <ChevronDown size={13} aria-hidden="true" />}
+                      </button>
+                    )}
+                    <button
+                      onClick={handleSave}
+                      disabled={isBusy || !inputVal.trim()}
+                      className="eg-btn eg-btn--primary"
+                    >
+                      {mode === 'saving'
+                        ? <><RefreshCw size={14} className="spin" aria-hidden="true" /> Guardando…</>
+                        : <><Check size={14} aria-hidden="true" /> {isLabeled ? 'Actualizar' : 'Guardar'}</>}
                     </button>
-                  )}
+                    {mode === 'editing' && (
+                      <button onClick={cancelEdit} className="eg-btn eg-btn--ghost">
+                        <X size={14} aria-hidden="true" /> Cancelar
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
+
+                {/* Inline glossary panel: browse categories, click to fill input */}
+                {showGlosPanel && glossaryCategories.length > 0 && (
+                  <GlossaryPanel
+                    categories={glossaryCategories}
+                    onSelect={t => { setInputVal(t); setShowGlosPanel(false) }}
+                  />
+                )}
+              </>
             )}
 
             {apiError && (
@@ -687,20 +691,20 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
 
 /* ═══════════════════════════════════════════════════════
    SESSION WORKSPACE  (HU-15 → HU-21)
-   Fetches audios, estado and glossary on mount.
-   Glossary terms are passed into every AudioRow's combobox.
+   Fetches audios, estado and glossary on mount (parallel).
+   Glossary categories are passed into every AudioRow.
 ═══════════════════════════════════════════════════════ */
 
 function SessionWorkspace({ community, session, onBack }: {
   community: string; session: string; onBack: () => void
 }) {
-  const [audios, setAudios]             = useState<AudioItem[]>([])
-  const [estado, setEstado]             = useState<EstadoResponse | null>(null)
-  const [glossaryTerms, setGlossaryTerms] = useState<GlosarioFlat[]>([])
-  const [loading, setLoading]           = useState(true)
-  const [error, setError]               = useState<string | null>(null)
-  const [showGlosario, setShowGlosario] = useState(false)
-  const [expandedAudio, setExpandedAudio] = useState<string | null>(null)
+  const [audios, setAudios]                         = useState<AudioItem[]>([])
+  const [estado, setEstado]                         = useState<EstadoResponse | null>(null)
+  const [glossaryCategories, setGlossaryCategories] = useState<GlosarioCategoria[]>([])
+  const [loading, setLoading]                       = useState(true)
+  const [error, setError]                           = useState<string | null>(null)
+  const [showGlosario, setShowGlosario]             = useState(false)
+  const [expandedAudio, setExpandedAudio]           = useState<string | null>(null)
 
   const fetchData = useCallback(async () => {
     setLoading(true); setError(null)
@@ -719,16 +723,9 @@ function SessionWorkspace({ community, session, onBack }: {
       let estadoData: EstadoResponse | null = null
       if (estadoRes?.ok) estadoData = await estadoRes.json()
 
-      // Flatten glossary into a simple list for the combobox
       if (glosRes?.ok) {
         const glosData: GlosarioResponse = await glosRes.json()
-        const flat: GlosarioFlat[] = []
-        for (const cat of (glosData.categorias ?? [])) {
-          for (const t of cat.terminos) {
-            flat.push({ traduccion: t.traduccion, espanol: t.espanol })
-          }
-        }
-        setGlossaryTerms(flat)
+        setGlossaryCategories(glosData.categorias ?? [])
       }
 
       const labelMap = new Map<string, string>()
@@ -747,7 +744,7 @@ function SessionWorkspace({ community, session, onBack }: {
     }
   }, [community, session])
 
-  // Silent refresh after label change — only re-fetches estado
+  // Silent refresh after label change — only re-fetches estado, no spinner
   const refreshEstado = useCallback(async () => {
     try {
       const res = await fetch(`${API}/api/grabaciones/${community}/${session}/estado/`)
@@ -766,9 +763,10 @@ function SessionWorkspace({ community, session, onBack }: {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  const pct     = estado?.porcentaje_completado ?? 0
-  const labeled = estado?.total_etiquetados ?? 0
-  const total   = estado?.total_audios ?? audios.length
+  const pct       = estado?.porcentaje_completado ?? 0
+  const labeled   = estado?.total_etiquetados ?? 0
+  const total     = estado?.total_audios ?? audios.length
+  const termCount = glossaryCategories.reduce((s, c) => s + c.terminos.length, 0)
 
   return (
     <div className="eg-workspace">
@@ -792,8 +790,8 @@ function SessionWorkspace({ community, session, onBack }: {
             <button onClick={() => setShowGlosario(true)} className="eg-btn eg-btn--ghost-light" aria-label="Ver glosario completo">
               <BookOpen size={15} aria-hidden="true" />
               Glosario
-              {glossaryTerms.length > 0 && (
-                <span className="eg-glos-badge">{glossaryTerms.length}</span>
+              {termCount > 0 && (
+                <span className="eg-glos-badge">{termCount}</span>
               )}
             </button>
           </div>
@@ -832,9 +830,9 @@ function SessionWorkspace({ community, session, onBack }: {
                 <Music size={18} aria-hidden="true" /> Audios · {session}
               </h2>
               <div className="eg-section-header-right">
-                {glossaryTerms.length > 0 && (
+                {termCount > 0 && (
                   <span className="eg-glos-info">
-                    <BookOpen size={13} aria-hidden="true" /> {glossaryTerms.length} términos en glosario
+                    <BookOpen size={13} aria-hidden="true" /> {termCount} términos en glosario
                   </span>
                 )}
                 <button onClick={fetchData} className="eg-refresh-btn" aria-label="Recargar">
@@ -858,7 +856,7 @@ function SessionWorkspace({ community, session, onBack }: {
                     onLabelChange={refreshEstado}
                     isExpanded={expandedAudio === a.nombre}
                     onToggle={() => setExpandedAudio(prev => prev === a.nombre ? null : a.nombre)}
-                    glossaryTerms={glossaryTerms}
+                    glossaryCategories={glossaryCategories}
                   />
                 ))}
               </ul>
