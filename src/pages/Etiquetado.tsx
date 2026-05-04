@@ -18,7 +18,6 @@ interface AudioStats {
   total_audios: number
   duracion_segundos?: number
   duracion_formateada?: string
-  sin_metadata?: number
 }
 
 interface CommunityStats {
@@ -33,7 +32,6 @@ interface Jornada {
   nombre: string
   fecha_texto?: string
   tematica?: string
-  total_items?: number
   audios_sin_procesar?: AudioStats
 }
 
@@ -42,6 +40,11 @@ interface AudioItem {
   duracion_formateada?: string
   etiquetado: boolean
   etiqueta?: string
+}
+
+interface GlosarioFlat {
+  traduccion: string
+  espanol: string
 }
 
 interface GlosarioTermino {
@@ -137,9 +140,7 @@ function PasswordGate({ onAuth }: { onAuth: () => void }) {
    STAT CARD
 ═══════════════════════════════════════════════════════ */
 
-function StatCard({
-  label, value, sub, icon, accent,
-}: {
+function StatCard({ label, value, sub, icon, accent }: {
   label: string; value: string | number; sub?: string
   icon: React.ReactNode; accent?: 'red'
 }) {
@@ -196,12 +197,10 @@ function StatsDashboard() {
           <RefreshCw size={15} className={loading ? 'spin' : ''} aria-hidden="true" /> Actualizar
         </button>
       </div>
-
       {error && <div className="eg-alert" role="alert"><AlertCircle size={16} aria-hidden="true" /> {error}</div>}
       {loading && !error && (
         <div className="eg-loading" aria-live="polite"><RefreshCw size={20} className="spin" aria-hidden="true" /> Cargando…</div>
       )}
-
       {!loading && !error && (
         <>
           <div className="eg-stats-grid">
@@ -277,7 +276,6 @@ function SessionList({ onSelect }: { onSelect: (community: string, session: stri
           <RefreshCw size={15} className={loading ? 'spin' : ''} aria-hidden="true" /> Actualizar
         </button>
       </div>
-
       <div className="eg-tabs" role="tablist" aria-label="Seleccionar comunidad">
         {COMMUNITIES.map(c => (
           <button key={c} role="tab" aria-selected={community === c}
@@ -288,7 +286,6 @@ function SessionList({ onSelect }: { onSelect: (community: string, session: stri
           </button>
         ))}
       </div>
-
       <div role="tabpanel" className="eg-tabpanel">
         {error && <div className="eg-alert" role="alert"><AlertCircle size={16} aria-hidden="true" /> {error}</div>}
         {loading && <div className="eg-loading"><RefreshCw size={18} className="spin" aria-hidden="true" /> Cargando jornadas…</div>}
@@ -330,16 +327,111 @@ function SessionList({ onSelect }: { onSelect: (community: string, session: stri
 }
 
 /* ═══════════════════════════════════════════════════════
-   GLOSSARY MODAL  (HU-17)
-   Terms display as clickable cards: traduccion (espanol)
-   Clicking a term calls onSelectTerm → auto-fills label input
+   LABEL COMBOBOX
+   Text input + dropdown showing glossary terms.
+   User can type freely OR click a term from the list.
+   Each option shows: traduccion (espanol)
 ═══════════════════════════════════════════════════════ */
 
-function GlossaryModal({ community, session, onClose, onSelectTerm }: {
-  community: string
-  session: string
-  onClose: () => void
-  onSelectTerm: (term: string) => void
+function LabelCombobox({ value, onChange, onEnter, terms, disabled, inputId }: {
+  value: string
+  onChange: (v: string) => void
+  onEnter: () => void
+  terms: GlosarioFlat[]
+  disabled: boolean
+  inputId: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+
+  const q = query.trim().toLowerCase()
+  const suggestions = q === ''
+    ? terms.slice(0, 40)
+    : terms.filter(t =>
+        t.traduccion.toLowerCase().includes(q) ||
+        t.espanol.toLowerCase().includes(q)
+      ).slice(0, 40)
+
+  function handleInput(e: React.ChangeEvent<HTMLInputElement>) {
+    const v = e.target.value
+    setQuery(v)
+    onChange(v)
+    setOpen(true)
+  }
+
+  function handleSelect(t: GlosarioFlat) {
+    onChange(t.traduccion)
+    setQuery('')
+    setOpen(false)
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Escape') { setOpen(false); return }
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      if (open) { setOpen(false) } else { onEnter() }
+    }
+  }
+
+  return (
+    <div className="eg-combobox">
+      <input
+        id={inputId}
+        type="text"
+        value={value}
+        onChange={handleInput}
+        onFocus={() => { setQuery(''); setOpen(true) }}
+        onBlur={() => setTimeout(() => setOpen(false), 160)}
+        onKeyDown={handleKeyDown}
+        placeholder={terms.length > 0 ? 'Escribir libremente o seleccionar del glosario…' : 'Escribir en lengua indígena…'}
+        className="eg-gate-input eg-label-input"
+        disabled={disabled}
+        autoComplete="off"
+        autoFocus
+        role="combobox"
+        aria-expanded={open && suggestions.length > 0}
+        aria-autocomplete="list"
+        aria-controls={`${inputId}-list`}
+      />
+      {open && suggestions.length > 0 && (
+        <ul
+          id={`${inputId}-list`}
+          className="eg-combobox-dropdown"
+          role="listbox"
+          aria-label="Términos del glosario"
+        >
+          {terms.length > 0 && q === '' && (
+            <li className="eg-combobox-header" aria-hidden="true">
+              Glosario — {terms.length} términos disponibles
+            </li>
+          )}
+          {suggestions.map((t, i) => (
+            <li key={i} role="option" aria-selected={value === t.traduccion}>
+              <button
+                type="button"
+                className={`eg-combobox-option${value === t.traduccion ? ' eg-combobox-option--active' : ''}`}
+                onMouseDown={e => { e.preventDefault(); handleSelect(t) }}
+                tabIndex={-1}
+              >
+                <span className="eg-combobox-term">{t.traduccion}</span>
+                <span className="eg-combobox-hint">({t.espanol})</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════
+   GLOSSARY MODAL  (reference viewer — HU-17)
+   Kept for full context: categories, notes, metadata.
+   Not used for selection (combobox handles that).
+═══════════════════════════════════════════════════════ */
+
+function GlossaryModal({ community, session, onClose }: {
+  community: string; session: string; onClose: () => void
 }) {
   const [data, setData] = useState<GlosarioResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -364,9 +456,7 @@ function GlossaryModal({ community, session, onClose, onSelectTerm }: {
   }, [onClose])
 
   const q = search.trim().toLowerCase()
-  const filtered: GlosarioCategoria[] = !data
-    ? []
-    : q === ''
+  const filtered: GlosarioCategoria[] = !data ? [] : q === ''
     ? data.categorias
     : data.categorias
         .map(cat => ({
@@ -377,26 +467,19 @@ function GlossaryModal({ community, session, onClose, onSelectTerm }: {
         }))
         .filter(cat => cat.terminos.length > 0)
 
-  function handleSelect(traduccion: string) {
-    onSelectTerm(traduccion)
-    onClose()
-  }
-
   return (
     <div className="eg-modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label="Glosario de referencia">
       <div className="eg-modal" onClick={e => e.stopPropagation()}>
         <div className="eg-modal-header">
           <div className="eg-modal-title-row">
             <BookOpen size={18} aria-hidden="true" />
-            <h2 className="eg-modal-title">Glosario de referencia</h2>
+            <h2 className="eg-modal-title">Glosario completo</h2>
           </div>
           {data?.metadata?.titulo && <p className="eg-modal-sub">{data.metadata.titulo}</p>}
-          <p className="eg-modal-hint">Haz clic en un término para usarlo como etiqueta</p>
           <button onClick={onClose} className="eg-modal-close" aria-label="Cerrar glosario">
             <X size={18} />
           </button>
         </div>
-
         <div className="eg-modal-search">
           <input
             type="search"
@@ -408,32 +491,22 @@ function GlossaryModal({ community, session, onClose, onSelectTerm }: {
             autoFocus
           />
         </div>
-
         <div className="eg-modal-body">
           {error && <div className="eg-alert" role="alert"><AlertCircle size={16} aria-hidden="true" /> {error}</div>}
-          {loading && <div className="eg-loading"><RefreshCw size={18} className="spin" aria-hidden="true" /> Cargando glosario…</div>}
+          {loading && <div className="eg-loading"><RefreshCw size={18} className="spin" aria-hidden="true" /> Cargando…</div>}
           {!loading && !error && filtered.length === 0 && (
             <div className="eg-empty"><BookOpen size={28} aria-hidden="true" /><p>No se encontraron términos</p></div>
           )}
           {!loading && filtered.map(cat => (
             <div key={cat.nombre} className="eg-glosario-cat">
               <h3 className="eg-glosario-cat-title">{cat.nombre}</h3>
-              <div className="eg-glosario-terms" role="list" aria-label={cat.nombre}>
+              <div className="eg-glosario-terms">
                 {cat.terminos.map((t, i) => (
-                  <button
-                    key={i}
-                    role="listitem"
-                    className="eg-glosario-term"
-                    onClick={() => handleSelect(t.traduccion)}
-                    aria-label={`Usar "${t.traduccion}" (${t.espanol}) como etiqueta`}
-                  >
-                    {/* Primary: word in indigenous language */}
+                  <div key={i} className="eg-glosario-ref">
                     <span className="eg-glosario-term-traduccion">{t.traduccion}</span>
-                    {/* Secondary: Spanish meaning in parens */}
                     <span className="eg-glosario-term-espanol">({t.espanol})</span>
-                    {/* Optional note on next line */}
                     {t.nota && <span className="eg-glosario-term-nota">{t.nota}</span>}
-                  </button>
+                  </div>
                 ))}
               </div>
             </div>
@@ -446,38 +519,25 @@ function GlossaryModal({ community, session, onClose, onSelectTerm }: {
 
 /* ═══════════════════════════════════════════════════════
    AUDIO ROW  (HU-16 · HU-18 · HU-19 · HU-20)
-   Receives pendingTerm from workspace: if a term was selected
-   from the glossary and this row is expanded, auto-fills input.
 ═══════════════════════════════════════════════════════ */
 
-function AudioRow({ audio, community, session, onLabelChange, isExpanded, onToggle, pendingTerm, onClearPendingTerm }: {
+function AudioRow({ audio, community, session, onLabelChange, isExpanded, onToggle, glossaryTerms }: {
   audio: AudioItem
   community: string
   session: string
   onLabelChange: () => void
   isExpanded: boolean
   onToggle: () => void
-  pendingTerm: string | null
-  onClearPendingTerm: () => void
+  glossaryTerms: GlosarioFlat[]
 }) {
   const [mode, setMode]         = useState<LabelMode>('idle')
   const [inputVal, setInputVal] = useState(audio.etiqueta ?? '')
   const [apiError, setApiError] = useState<string | null>(null)
 
-  // When this row opens AND there's a glossary term waiting → auto-fill
-  useEffect(() => {
-    if (isExpanded && pendingTerm) {
-      setInputVal(pendingTerm)
-      // If already labeled, switch to editing mode so the input is visible
-      if (audio.etiquetado && mode === 'idle') setMode('editing')
-      onClearPendingTerm()
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isExpanded, pendingTerm])
-
-  const audioUrl = `${API}/api/grabaciones/${community}/${session}/audios/${encodeURIComponent(audio.nombre)}`
+  const audioUrl  = `${API}/api/grabaciones/${community}/${session}/audios/${encodeURIComponent(audio.nombre)}`
   const isLabeled = audio.etiquetado
   const isBusy    = mode === 'saving' || mode === 'deleting'
+  const inputId   = `lbl-${audio.nombre.replace(/[^a-z0-9]/gi, '-')}`
 
   function startEdit()  { setInputVal(audio.etiqueta ?? ''); setApiError(null); setMode('editing') }
   function cancelEdit() { setInputVal(audio.etiqueta ?? ''); setApiError(null); setMode('idle') }
@@ -532,7 +592,7 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
 
   return (
     <li className={`eg-audio-row${isExpanded ? ' eg-audio-row--open' : ''}`}>
-      {/* Row header */}
+      {/* Row header — accordion toggle */}
       <button
         className="eg-audio-row-header"
         onClick={onToggle}
@@ -541,8 +601,8 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
       >
         <span className={`eg-audio-status${isLabeled ? ' eg-audio-status--done' : ''}`}>
           {isLabeled
-            ? <><Check  size={11} aria-hidden="true" /> Etiquetado</>
-            : <><Tag    size={11} aria-hidden="true" /> Pendiente</>}
+            ? <><Check size={11} aria-hidden="true" /> Etiquetado</>
+            : <><Tag   size={11} aria-hidden="true" /> Pendiente</>}
         </span>
         <span className="eg-audio-name" title={audio.nombre}>{audio.nombre}</span>
         {audio.duracion_formateada && (
@@ -554,7 +614,7 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
       {/* Expanded body */}
       {isExpanded && (
         <div id={`audio-body-${audio.nombre}`} className="eg-audio-body">
-          {/* HU-16: audio player */}
+          {/* HU-16: native audio player */}
           <audio controls src={audioUrl} className="eg-audio-player" aria-label={`Reproducir ${audio.nombre}`}>
             Tu navegador no soporta el elemento audio.
           </audio>
@@ -565,14 +625,15 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
               <Tag size={14} aria-hidden="true" /> Etiqueta en lengua indígena
             </p>
 
+            {/* Show current label + edit/delete buttons */}
             {showDisplay && (
               <div className="eg-label-display">
                 <span className="eg-label-value">{audio.etiqueta}</span>
                 <div className="eg-label-actions">
-                  <button onClick={startEdit} disabled={isBusy} className="eg-btn eg-btn--ghost" aria-label="Editar etiqueta">
+                  <button onClick={startEdit} disabled={isBusy} className="eg-btn eg-btn--ghost">
                     <Edit2 size={14} aria-hidden="true" /> Editar
                   </button>
-                  <button onClick={handleDelete} disabled={isBusy} className="eg-btn eg-btn--danger" aria-label="Eliminar etiqueta">
+                  <button onClick={handleDelete} disabled={isBusy} className="eg-btn eg-btn--danger">
                     {mode === 'deleting'
                       ? <><RefreshCw size={14} className="spin" aria-hidden="true" /> Eliminando…</>
                       : <><Trash2 size={14} aria-hidden="true" /> Eliminar</>}
@@ -581,27 +642,23 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
               </div>
             )}
 
+            {/* Combobox: free text + glossary dropdown */}
             {showInput && (
               <div className="eg-label-input-row">
-                <label htmlFor={`lbl-${audio.nombre}`} className="sr-only">Etiqueta para {audio.nombre}</label>
-                <input
-                  id={`lbl-${audio.nombre}`}
-                  type="text"
+                <label htmlFor={inputId} className="sr-only">Etiqueta para {audio.nombre}</label>
+                <LabelCombobox
                   value={inputVal}
-                  onChange={e => setInputVal(e.target.value)}
-                  placeholder="Ej: Muñzek gue"
-                  className="eg-gate-input eg-label-input"
+                  onChange={setInputVal}
+                  onEnter={handleSave}
+                  terms={glossaryTerms}
                   disabled={isBusy}
-                  onKeyDown={e => { if (e.key === 'Enter') handleSave() }}
-                  autoFocus
-                  autoComplete="off"
+                  inputId={inputId}
                 />
                 <div className="eg-label-input-btns">
                   <button
                     onClick={handleSave}
                     disabled={isBusy || !inputVal.trim()}
                     className="eg-btn eg-btn--primary"
-                    aria-label={isLabeled ? 'Actualizar etiqueta' : 'Guardar etiqueta'}
                   >
                     {mode === 'saving'
                       ? <><RefreshCw size={14} className="spin" aria-hidden="true" /> Guardando…</>
@@ -630,33 +687,49 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
 
 /* ═══════════════════════════════════════════════════════
    SESSION WORKSPACE  (HU-15 → HU-21)
+   Fetches audios, estado and glossary on mount.
+   Glossary terms are passed into every AudioRow's combobox.
 ═══════════════════════════════════════════════════════ */
 
 function SessionWorkspace({ community, session, onBack }: {
   community: string; session: string; onBack: () => void
 }) {
-  const [audios, setAudios]         = useState<AudioItem[]>([])
-  const [estado, setEstado]         = useState<EstadoResponse | null>(null)
-  const [loading, setLoading]       = useState(true)
-  const [error, setError]           = useState<string | null>(null)
+  const [audios, setAudios]             = useState<AudioItem[]>([])
+  const [estado, setEstado]             = useState<EstadoResponse | null>(null)
+  const [glossaryTerms, setGlossaryTerms] = useState<GlosarioFlat[]>([])
+  const [loading, setLoading]           = useState(true)
+  const [error, setError]               = useState<string | null>(null)
   const [showGlosario, setShowGlosario] = useState(false)
-  // Accordion: only one row open at a time
   const [expandedAudio, setExpandedAudio] = useState<string | null>(null)
-  // Pending term from glossary selection
-  const [pendingTerm, setPendingTerm] = useState<string | null>(null)
-
-  const clearPendingTerm = useCallback(() => setPendingTerm(null), [])
 
   const fetchData = useCallback(async () => {
     setLoading(true); setError(null)
     try {
+      // Required: audio list
       const audiosRes = await fetch(`${API}/api/grabaciones/${community}/${session}/audios/`)
       if (!audiosRes.ok) throw new Error(`HTTP ${audiosRes.status}`)
       const audiosData = await audiosRes.json()
 
-      const estadoRes = await fetch(`${API}/api/grabaciones/${community}/${session}/estado/`)
+      // Optional: estado + glosario in parallel
+      const [estadoRes, glosRes] = await Promise.all([
+        fetch(`${API}/api/grabaciones/${community}/${session}/estado/`).catch(() => null),
+        fetch(`${API}/api/grabaciones/${community}/${session}/glosario/`).catch(() => null),
+      ])
+
       let estadoData: EstadoResponse | null = null
-      if (estadoRes.ok) estadoData = await estadoRes.json()
+      if (estadoRes?.ok) estadoData = await estadoRes.json()
+
+      // Flatten glossary into a simple list for the combobox
+      if (glosRes?.ok) {
+        const glosData: GlosarioResponse = await glosRes.json()
+        const flat: GlosarioFlat[] = []
+        for (const cat of (glosData.categorias ?? [])) {
+          for (const t of cat.terminos) {
+            flat.push({ traduccion: t.traduccion, espanol: t.espanol })
+          }
+        }
+        setGlossaryTerms(flat)
+      }
 
       const labelMap = new Map<string, string>()
       for (const e of (estadoData?.etiquetados ?? [])) labelMap.set(e.audio, e.etiqueta)
@@ -674,6 +747,7 @@ function SessionWorkspace({ community, session, onBack }: {
     }
   }, [community, session])
 
+  // Silent refresh after label change — only re-fetches estado
   const refreshEstado = useCallback(async () => {
     try {
       const res = await fetch(`${API}/api/grabaciones/${community}/${session}/estado/`)
@@ -692,28 +766,17 @@ function SessionWorkspace({ community, session, onBack }: {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  function handleToggle(nombre: string) {
-    setExpandedAudio(prev => prev === nombre ? null : nombre)
-  }
-
-  // When a glossary term is selected, close modal and store term.
-  // If there's already an open row, the AudioRow useEffect will pick it up immediately.
-  function handleSelectTerm(term: string) {
-    setPendingTerm(term)
-    setShowGlosario(false)
-  }
-
   const pct     = estado?.porcentaje_completado ?? 0
   const labeled = estado?.total_etiquetados ?? 0
   const total   = estado?.total_audios ?? audios.length
 
   return (
     <div className="eg-workspace">
-      {/* Sticky workspace header */}
+      {/* Sticky header */}
       <div className="eg-ws-header">
         <div className="container">
           <div className="eg-ws-nav">
-            <button onClick={onBack} className="eg-btn eg-btn--ghost-light" aria-label="Volver a jornadas">
+            <button onClick={onBack} className="eg-btn eg-btn--ghost-light" aria-label="Volver">
               <ArrowLeft size={15} aria-hidden="true" /> Volver
             </button>
             <nav aria-label="Ubicación actual" className="eg-breadcrumb-nav">
@@ -726,8 +789,12 @@ function SessionWorkspace({ community, session, onBack }: {
               <span aria-hidden="true"> › </span>
               <span className="eg-breadcrumb-current" aria-current="page">{session}</span>
             </nav>
-            <button onClick={() => setShowGlosario(true)} className="eg-btn eg-btn--ghost-light" aria-label="Abrir glosario">
-              <BookOpen size={15} aria-hidden="true" /> Glosario
+            <button onClick={() => setShowGlosario(true)} className="eg-btn eg-btn--ghost-light" aria-label="Ver glosario completo">
+              <BookOpen size={15} aria-hidden="true" />
+              Glosario
+              {glossaryTerms.length > 0 && (
+                <span className="eg-glos-badge">{glossaryTerms.length}</span>
+              )}
             </button>
           </div>
 
@@ -747,18 +814,6 @@ function SessionWorkspace({ community, session, onBack }: {
 
       {/* Body */}
       <div className="eg-ws-body container">
-        {/* Pending term banner */}
-        {pendingTerm && (
-          <div className="eg-pending-term" role="status" aria-live="polite">
-            <Tag size={14} aria-hidden="true" />
-            <span>Término seleccionado: <strong>{pendingTerm}</strong></span>
-            <span className="eg-pending-term-hint">— expande un audio para aplicarlo</span>
-            <button onClick={clearPendingTerm} className="eg-pending-term-dismiss" aria-label="Descartar término">
-              <X size={14} />
-            </button>
-          </div>
-        )}
-
         {error && (
           <div className="eg-section">
             <div className="eg-alert" role="alert"><AlertCircle size={16} aria-hidden="true" /> {error}</div>
@@ -766,7 +821,7 @@ function SessionWorkspace({ community, session, onBack }: {
         )}
         {loading && (
           <div className="eg-section">
-            <div className="eg-loading"><RefreshCw size={20} className="spin" aria-hidden="true" /> Cargando audios…</div>
+            <div className="eg-loading"><RefreshCw size={20} className="spin" aria-hidden="true" /> Cargando audios y glosario…</div>
           </div>
         )}
 
@@ -776,9 +831,16 @@ function SessionWorkspace({ community, session, onBack }: {
               <h2 className="eg-section-title">
                 <Music size={18} aria-hidden="true" /> Audios · {session}
               </h2>
-              <button onClick={fetchData} className="eg-refresh-btn" aria-label="Recargar">
-                <RefreshCw size={15} aria-hidden="true" /> Actualizar
-              </button>
+              <div className="eg-section-header-right">
+                {glossaryTerms.length > 0 && (
+                  <span className="eg-glos-info">
+                    <BookOpen size={13} aria-hidden="true" /> {glossaryTerms.length} términos en glosario
+                  </span>
+                )}
+                <button onClick={fetchData} className="eg-refresh-btn" aria-label="Recargar">
+                  <RefreshCw size={15} aria-hidden="true" /> Actualizar
+                </button>
+              </div>
             </div>
 
             {audios.length === 0 && (
@@ -795,9 +857,8 @@ function SessionWorkspace({ community, session, onBack }: {
                     session={session}
                     onLabelChange={refreshEstado}
                     isExpanded={expandedAudio === a.nombre}
-                    onToggle={() => handleToggle(a.nombre)}
-                    pendingTerm={pendingTerm}
-                    onClearPendingTerm={clearPendingTerm}
+                    onToggle={() => setExpandedAudio(prev => prev === a.nombre ? null : a.nombre)}
+                    glossaryTerms={glossaryTerms}
                   />
                 ))}
               </ul>
@@ -811,7 +872,6 @@ function SessionWorkspace({ community, session, onBack }: {
           community={community}
           session={session}
           onClose={() => setShowGlosario(false)}
-          onSelectTerm={handleSelectTerm}
         />
       )}
     </div>
@@ -819,7 +879,7 @@ function SessionWorkspace({ community, session, onBack }: {
 }
 
 /* ═══════════════════════════════════════════════════════
-   MAIN APP — navigation state
+   MAIN APP
 ═══════════════════════════════════════════════════════ */
 
 function EtiquetadoApp() {
@@ -851,13 +911,7 @@ function EtiquetadoApp() {
   )
 }
 
-/* ═══════════════════════════════════════════════════════
-   ENTRY POINT
-═══════════════════════════════════════════════════════ */
-
 export default function Etiquetado() {
   const [authed, setAuthed] = useState(() => sessionStorage.getItem(SESSION_KEY) === '1')
-  return authed
-    ? <EtiquetadoApp />
-    : <PasswordGate onAuth={() => setAuthed(true)} />
+  return authed ? <EtiquetadoApp /> : <PasswordGate onAuth={() => setAuthed(true)} />
 }

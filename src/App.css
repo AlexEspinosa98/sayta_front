@@ -1163,3 +1163,133 @@ a.contact-card .contact-card-icon { background: var(--blue); color: var(--white)
   .eg-label-display     { flex-direction: column; align-items: flex-start; }
   .eg-ws-progress-text  { display: none; }
 }
+
+/* ══════════════════════════════════════════
+   LABEL COMBOBOX
+══════════════════════════════════════════ */
+
+.eg-combobox {
+  position: relative;
+  flex: 1;
+}
+
+.eg-combobox-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0; right: 0;
+  z-index: 200;
+  background: var(--white);
+  border: 1.5px solid rgba(1,70,137,.25);
+  border-radius: var(--r-sm);
+  box-shadow: 0 8px 24px rgba(0,0,0,.12);
+  max-height: 260px;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0; padding: 4px 0;
+}
+
+.eg-combobox-header {
+  padding: 6px 14px;
+  font-size: .72rem;
+  font-weight: 700;
+  color: var(--gray-500);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  border-bottom: 1px solid var(--gray-200);
+  margin-bottom: 2px;
+}
+
+.eg-combobox-option {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font);
+  text-align: left;
+  transition: background .1s;
+}
+.eg-combobox-option:hover { background: var(--off-white); }
+.eg-combobox-option--active {
+  background: var(--blue-light);
+}
+.eg-combobox-option--active .eg-combobox-term { color: var(--blue); }
+
+.eg-combobox-term {
+  font-size: .92rem;
+  font-weight: 600;
+  color: var(--gray-800);
+  white-space: nowrap;
+}
+
+.eg-combobox-hint {
+  font-size: .82rem;
+  color: var(--gray-500);
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Glossary badge + info chip ── */
+.eg-glos-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--blue);
+  color: var(--white);
+  font-size: .68rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.eg-glos-info {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: .78rem;
+  color: var(--gray-500);
+  font-style: italic;
+}
+
+/* ── Section header right slot ── */
+.eg-section-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ── Glossary ref card (non-clickable, modal viewer) ── */
+.eg-glosario-ref {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 9px 14px;
+  border-radius: var(--r-sm);
+  background: var(--off-white);
+  border: 1.5px solid var(--gray-200);
+}
+.eg-glosario-ref .eg-glosario-term-traduccion {
+  font-size: .93rem;
+  font-weight: 700;
+  color: var(--blue);
+}
+.eg-glosario-ref .eg-glosario-term-espanol {
+  font-size: .83rem;
+  color: var(--gray-600);
+}
+.eg-glosario-ref .eg-glosario-term-nota {
+  width: 100%;
+  font-size: .74rem;
+  color: var(--gray-500);
+  font-style: italic;
+  margin-top: 2px;
+}
