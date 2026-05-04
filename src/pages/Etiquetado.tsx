@@ -24,7 +24,7 @@ interface AudioStats {
 interface CommunityStats {
   comunidad: string
   total_jornadas?: number
-  total_grabaciones?: number   // legacy field
+  total_grabaciones?: number
   total_archivos?: number
   audios_sin_procesar?: AudioStats
 }
@@ -41,7 +41,7 @@ interface AudioItem {
   nombre: string
   duracion_formateada?: string
   etiquetado: boolean
-  etiqueta?: string            // merged from /estado/
+  etiqueta?: string
 }
 
 interface GlosarioTermino {
@@ -238,7 +238,7 @@ function StatsDashboard() {
 }
 
 /* ═══════════════════════════════════════════════════════
-   SESSION LIST  (HU-15 entry point)
+   SESSION LIST
 ═══════════════════════════════════════════════════════ */
 
 const COMMUNITIES = ['Arhuaco', 'Kogui'] as const
@@ -280,8 +280,7 @@ function SessionList({ onSelect }: { onSelect: (community: string, session: stri
 
       <div className="eg-tabs" role="tablist" aria-label="Seleccionar comunidad">
         {COMMUNITIES.map(c => (
-          <button
-            key={c} role="tab" aria-selected={community === c}
+          <button key={c} role="tab" aria-selected={community === c}
             onClick={() => setCommunity(c)}
             className={`eg-tab${community === c ? ' eg-tab--active' : ''}`}
           >
@@ -316,9 +315,7 @@ function SessionList({ onSelect }: { onSelect: (community: string, session: stri
                   {j.audios_sin_procesar && (
                     <span className="eg-session-badge">
                       {j.audios_sin_procesar.total_audios} audios
-                      {j.audios_sin_procesar.duracion_formateada
-                        ? ` · ${j.audios_sin_procesar.duracion_formateada}`
-                        : ''}
+                      {j.audios_sin_procesar.duracion_formateada ? ` · ${j.audios_sin_procesar.duracion_formateada}` : ''}
                     </span>
                   )}
                   <span className="eg-session-arrow" aria-hidden="true">›</span>
@@ -334,10 +331,15 @@ function SessionList({ onSelect }: { onSelect: (community: string, session: stri
 
 /* ═══════════════════════════════════════════════════════
    GLOSSARY MODAL  (HU-17)
+   Terms display as clickable cards: traduccion (espanol)
+   Clicking a term calls onSelectTerm → auto-fills label input
 ═══════════════════════════════════════════════════════ */
 
-function GlossaryModal({ community, session, onClose }: {
-  community: string; session: string; onClose: () => void
+function GlossaryModal({ community, session, onClose, onSelectTerm }: {
+  community: string
+  session: string
+  onClose: () => void
+  onSelectTerm: (term: string) => void
 }) {
   const [data, setData] = useState<GlosarioResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -375,14 +377,13 @@ function GlossaryModal({ community, session, onClose }: {
         }))
         .filter(cat => cat.terminos.length > 0)
 
+  function handleSelect(traduccion: string) {
+    onSelectTerm(traduccion)
+    onClose()
+  }
+
   return (
-    <div
-      className="eg-modal-overlay"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Glosario de referencia"
-    >
+    <div className="eg-modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label="Glosario de referencia">
       <div className="eg-modal" onClick={e => e.stopPropagation()}>
         <div className="eg-modal-header">
           <div className="eg-modal-title-row">
@@ -390,6 +391,7 @@ function GlossaryModal({ community, session, onClose }: {
             <h2 className="eg-modal-title">Glosario de referencia</h2>
           </div>
           {data?.metadata?.titulo && <p className="eg-modal-sub">{data.metadata.titulo}</p>}
+          <p className="eg-modal-hint">Haz clic en un término para usarlo como etiqueta</p>
           <button onClick={onClose} className="eg-modal-close" aria-label="Cerrar glosario">
             <X size={18} />
           </button>
@@ -398,7 +400,7 @@ function GlossaryModal({ community, session, onClose }: {
         <div className="eg-modal-search">
           <input
             type="search"
-            placeholder="Buscar término en español o lengua indígena…"
+            placeholder="Buscar en español o lengua indígena…"
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="eg-gate-input"
@@ -416,25 +418,23 @@ function GlossaryModal({ community, session, onClose }: {
           {!loading && filtered.map(cat => (
             <div key={cat.nombre} className="eg-glosario-cat">
               <h3 className="eg-glosario-cat-title">{cat.nombre}</h3>
-              <div className="eg-glosario-table-wrap">
-                <table className="eg-glosario-table" aria-label={cat.nombre}>
-                  <thead>
-                    <tr>
-                      <th scope="col">Español</th>
-                      <th scope="col">Lengua indígena</th>
-                      <th scope="col">Nota</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cat.terminos.map((t, i) => (
-                      <tr key={i}>
-                        <td>{t.espanol}</td>
-                        <td className="eg-glosario-traduccion">{t.traduccion}</td>
-                        <td className="eg-glosario-nota">{t.nota ?? '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="eg-glosario-terms" role="list" aria-label={cat.nombre}>
+                {cat.terminos.map((t, i) => (
+                  <button
+                    key={i}
+                    role="listitem"
+                    className="eg-glosario-term"
+                    onClick={() => handleSelect(t.traduccion)}
+                    aria-label={`Usar "${t.traduccion}" (${t.espanol}) como etiqueta`}
+                  >
+                    {/* Primary: word in indigenous language */}
+                    <span className="eg-glosario-term-traduccion">{t.traduccion}</span>
+                    {/* Secondary: Spanish meaning in parens */}
+                    <span className="eg-glosario-term-espanol">({t.espanol})</span>
+                    {/* Optional note on next line */}
+                    {t.nota && <span className="eg-glosario-term-nota">{t.nota}</span>}
+                  </button>
+                ))}
               </div>
             </div>
           ))}
@@ -446,34 +446,41 @@ function GlossaryModal({ community, session, onClose }: {
 
 /* ═══════════════════════════════════════════════════════
    AUDIO ROW  (HU-16 · HU-18 · HU-19 · HU-20)
+   Receives pendingTerm from workspace: if a term was selected
+   from the glossary and this row is expanded, auto-fills input.
 ═══════════════════════════════════════════════════════ */
 
-function AudioRow({ audio, community, session, onLabelChange }: {
+function AudioRow({ audio, community, session, onLabelChange, isExpanded, onToggle, pendingTerm, onClearPendingTerm }: {
   audio: AudioItem
   community: string
   session: string
   onLabelChange: () => void
+  isExpanded: boolean
+  onToggle: () => void
+  pendingTerm: string | null
+  onClearPendingTerm: () => void
 }) {
-  const [expanded, setExpanded]   = useState(false)
-  const [mode, setMode]           = useState<LabelMode>('idle')
-  const [inputVal, setInputVal]   = useState(audio.etiqueta ?? '')
-  const [apiError, setApiError]   = useState<string | null>(null)
+  const [mode, setMode]         = useState<LabelMode>('idle')
+  const [inputVal, setInputVal] = useState(audio.etiqueta ?? '')
+  const [apiError, setApiError] = useState<string | null>(null)
+
+  // When this row opens AND there's a glossary term waiting → auto-fill
+  useEffect(() => {
+    if (isExpanded && pendingTerm) {
+      setInputVal(pendingTerm)
+      // If already labeled, switch to editing mode so the input is visible
+      if (audio.etiquetado && mode === 'idle') setMode('editing')
+      onClearPendingTerm()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isExpanded, pendingTerm])
 
   const audioUrl = `${API}/api/grabaciones/${community}/${session}/audios/${encodeURIComponent(audio.nombre)}`
   const isLabeled = audio.etiquetado
   const isBusy    = mode === 'saving' || mode === 'deleting'
 
-  function startEdit() {
-    setInputVal(audio.etiqueta ?? '')
-    setApiError(null)
-    setMode('editing')
-  }
-
-  function cancelEdit() {
-    setInputVal(audio.etiqueta ?? '')
-    setApiError(null)
-    setMode('idle')
-  }
+  function startEdit()  { setInputVal(audio.etiqueta ?? ''); setApiError(null); setMode('editing') }
+  function cancelEdit() { setInputVal(audio.etiqueta ?? ''); setApiError(null); setMode('idle') }
 
   async function handleSave() {
     if (!inputVal.trim()) return
@@ -481,24 +488,14 @@ function AudioRow({ audio, community, session, onLabelChange }: {
     try {
       let res: Response
       if (isLabeled) {
-        // HU-19: actualizar etiqueta existente
         res = await fetch(
           `${API}/api/grabaciones/${community}/${session}/etiqueta/${encodeURIComponent(audio.nombre)}/`,
-          {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ etiqueta: inputVal.trim() }),
-          }
+          { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ etiqueta: inputVal.trim() }) }
         )
       } else {
-        // HU-18: crear nueva etiqueta
         res = await fetch(
           `${API}/api/grabaciones/${community}/${session}/etiquetar/`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ nombre_audio: audio.nombre, etiqueta: inputVal.trim() }),
-          }
+          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre_audio: audio.nombre, etiqueta: inputVal.trim() }) }
         )
       }
       if (!res.ok) {
@@ -530,46 +527,35 @@ function AudioRow({ audio, community, session, onLabelChange }: {
     }
   }
 
-  // Show label display: labeled AND not in edit/save mode
   const showDisplay = isLabeled && (mode === 'idle' || mode === 'deleting')
-  // Show input: not labeled (create) OR editing/saving an existing label
   const showInput   = (!isLabeled && mode === 'idle') || mode === 'editing' || mode === 'saving'
 
   return (
-    <li className={`eg-audio-row${expanded ? ' eg-audio-row--open' : ''}`}>
+    <li className={`eg-audio-row${isExpanded ? ' eg-audio-row--open' : ''}`}>
       {/* Row header */}
       <button
         className="eg-audio-row-header"
-        onClick={() => setExpanded(x => !x)}
-        aria-expanded={expanded}
+        onClick={onToggle}
+        aria-expanded={isExpanded}
         aria-controls={`audio-body-${audio.nombre}`}
       >
-        <span className={`eg-audio-status${isLabeled ? ' eg-audio-status--done' : ''}`} aria-label={isLabeled ? 'Etiquetado' : 'Pendiente'}>
+        <span className={`eg-audio-status${isLabeled ? ' eg-audio-status--done' : ''}`}>
           {isLabeled
-            ? <><Check size={11} aria-hidden="true" /> Etiquetado</>
-            : <><Tag  size={11} aria-hidden="true" /> Pendiente</>}
+            ? <><Check  size={11} aria-hidden="true" /> Etiquetado</>
+            : <><Tag    size={11} aria-hidden="true" /> Pendiente</>}
         </span>
         <span className="eg-audio-name" title={audio.nombre}>{audio.nombre}</span>
         {audio.duracion_formateada && (
           <span className="eg-audio-duration"><Clock size={11} aria-hidden="true" /> {audio.duracion_formateada}</span>
         )}
-        <ChevronDown
-          size={15}
-          className={`eg-audio-chevron${expanded ? ' eg-audio-chevron--up' : ''}`}
-          aria-hidden="true"
-        />
+        <ChevronDown size={15} className={`eg-audio-chevron${isExpanded ? ' eg-audio-chevron--up' : ''}`} aria-hidden="true" />
       </button>
 
       {/* Expanded body */}
-      {expanded && (
+      {isExpanded && (
         <div id={`audio-body-${audio.nombre}`} className="eg-audio-body">
-          {/* HU-16: reproductor de audio */}
-          <audio
-            controls
-            src={audioUrl}
-            className="eg-audio-player"
-            aria-label={`Reproducir ${audio.nombre}`}
-          >
+          {/* HU-16: audio player */}
+          <audio controls src={audioUrl} className="eg-audio-player" aria-label={`Reproducir ${audio.nombre}`}>
             Tu navegador no soporta el elemento audio.
           </audio>
 
@@ -579,7 +565,6 @@ function AudioRow({ audio, community, session, onLabelChange }: {
               <Tag size={14} aria-hidden="true" /> Etiqueta en lengua indígena
             </p>
 
-            {/* HU-19/20: mostrar etiqueta existente + acciones */}
             {showDisplay && (
               <div className="eg-label-display">
                 <span className="eg-label-value">{audio.etiqueta}</span>
@@ -596,18 +581,15 @@ function AudioRow({ audio, community, session, onLabelChange }: {
               </div>
             )}
 
-            {/* HU-18: crear etiqueta / HU-19: editar etiqueta */}
             {showInput && (
               <div className="eg-label-input-row">
-                <label htmlFor={`lbl-${audio.nombre}`} className="sr-only">
-                  Etiqueta para {audio.nombre}
-                </label>
+                <label htmlFor={`lbl-${audio.nombre}`} className="sr-only">Etiqueta para {audio.nombre}</label>
                 <input
                   id={`lbl-${audio.nombre}`}
                   type="text"
                   value={inputVal}
                   onChange={e => setInputVal(e.target.value)}
-                  placeholder="Ej: Sakuku"
+                  placeholder="Ej: Muñzek gue"
                   className="eg-gate-input eg-label-input"
                   disabled={isBusy}
                   onKeyDown={e => { if (e.key === 'Enter') handleSave() }}
@@ -626,7 +608,7 @@ function AudioRow({ audio, community, session, onLabelChange }: {
                       : <><Check size={14} aria-hidden="true" /> {isLabeled ? 'Actualizar' : 'Guardar'}</>}
                   </button>
                   {mode === 'editing' && (
-                    <button onClick={cancelEdit} className="eg-btn eg-btn--ghost" aria-label="Cancelar edición">
+                    <button onClick={cancelEdit} className="eg-btn eg-btn--ghost">
                       <X size={14} aria-hidden="true" /> Cancelar
                     </button>
                   )}
@@ -653,13 +635,18 @@ function AudioRow({ audio, community, session, onLabelChange }: {
 function SessionWorkspace({ community, session, onBack }: {
   community: string; session: string; onBack: () => void
 }) {
-  const [audios, setAudios]       = useState<AudioItem[]>([])
-  const [estado, setEstado]       = useState<EstadoResponse | null>(null)
-  const [loading, setLoading]     = useState(true)
-  const [error, setError]         = useState<string | null>(null)
+  const [audios, setAudios]         = useState<AudioItem[]>([])
+  const [estado, setEstado]         = useState<EstadoResponse | null>(null)
+  const [loading, setLoading]       = useState(true)
+  const [error, setError]           = useState<string | null>(null)
   const [showGlosario, setShowGlosario] = useState(false)
+  // Accordion: only one row open at a time
+  const [expandedAudio, setExpandedAudio] = useState<string | null>(null)
+  // Pending term from glossary selection
+  const [pendingTerm, setPendingTerm] = useState<string | null>(null)
 
-  // Full load on mount
+  const clearPendingTerm = useCallback(() => setPendingTerm(null), [])
+
   const fetchData = useCallback(async () => {
     setLoading(true); setError(null)
     try {
@@ -667,7 +654,6 @@ function SessionWorkspace({ community, session, onBack }: {
       if (!audiosRes.ok) throw new Error(`HTTP ${audiosRes.status}`)
       const audiosData = await audiosRes.json()
 
-      // Estado is optional — if the session has no processed folder yet it may 404
       const estadoRes = await fetch(`${API}/api/grabaciones/${community}/${session}/estado/`)
       let estadoData: EstadoResponse | null = null
       if (estadoRes.ok) estadoData = await estadoRes.json()
@@ -688,7 +674,6 @@ function SessionWorkspace({ community, session, onBack }: {
     }
   }, [community, session])
 
-  // Silent refresh after each label change — avoids full spinner flash
   const refreshEstado = useCallback(async () => {
     try {
       const res = await fetch(`${API}/api/grabaciones/${community}/${session}/estado/`)
@@ -702,10 +687,21 @@ function SessionWorkspace({ community, session, onBack }: {
         etiquetado: labelMap.has(a.nombre),
         etiqueta:   labelMap.get(a.nombre),
       })))
-    } catch { /* ignore — estado is optional */ }
+    } catch { /* ignore */ }
   }, [community, session])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  function handleToggle(nombre: string) {
+    setExpandedAudio(prev => prev === nombre ? null : nombre)
+  }
+
+  // When a glossary term is selected, close modal and store term.
+  // If there's already an open row, the AudioRow useEffect will pick it up immediately.
+  function handleSelectTerm(term: string) {
+    setPendingTerm(term)
+    setShowGlosario(false)
+  }
 
   const pct     = estado?.porcentaje_completado ?? 0
   const labeled = estado?.total_etiquetados ?? 0
@@ -720,7 +716,6 @@ function SessionWorkspace({ community, session, onBack }: {
             <button onClick={onBack} className="eg-btn eg-btn--ghost-light" aria-label="Volver a jornadas">
               <ArrowLeft size={15} aria-hidden="true" /> Volver
             </button>
-
             <nav aria-label="Ubicación actual" className="eg-breadcrumb-nav">
               <span className="eg-breadcrumb-link" onClick={onBack} role="button" tabIndex={0}
                 onKeyDown={e => e.key === 'Enter' && onBack()}>
@@ -731,25 +726,20 @@ function SessionWorkspace({ community, session, onBack }: {
               <span aria-hidden="true"> › </span>
               <span className="eg-breadcrumb-current" aria-current="page">{session}</span>
             </nav>
-
-            <button
-              onClick={() => setShowGlosario(true)}
-              className="eg-btn eg-btn--ghost-light"
-              aria-label="Abrir glosario de referencia"
-            >
+            <button onClick={() => setShowGlosario(true)} className="eg-btn eg-btn--ghost-light" aria-label="Abrir glosario">
               <BookOpen size={15} aria-hidden="true" /> Glosario
             </button>
           </div>
 
-          {/* HU-21: barra de progreso */}
-          <div className="eg-ws-progress" aria-label={`Progreso: ${labeled} de ${total} etiquetados`}>
+          {/* HU-21: progress bar */}
+          <div className="eg-ws-progress" aria-label={`${labeled} de ${total} etiquetados`}>
             <div className="eg-ws-progress-bar" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
               <div className="eg-ws-progress-fill" style={{ width: `${pct}%` }} />
             </div>
             <span className="eg-ws-progress-text">
               {estado
                 ? <>{labeled} / {total} etiquetados · <strong>{pct.toFixed(0)} %</strong></>
-                : 'Calculando progreso…'}
+                : 'Calculando…'}
             </span>
           </div>
         </div>
@@ -757,12 +747,23 @@ function SessionWorkspace({ community, session, onBack }: {
 
       {/* Body */}
       <div className="eg-ws-body container">
+        {/* Pending term banner */}
+        {pendingTerm && (
+          <div className="eg-pending-term" role="status" aria-live="polite">
+            <Tag size={14} aria-hidden="true" />
+            <span>Término seleccionado: <strong>{pendingTerm}</strong></span>
+            <span className="eg-pending-term-hint">— expande un audio para aplicarlo</span>
+            <button onClick={clearPendingTerm} className="eg-pending-term-dismiss" aria-label="Descartar término">
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
         {error && (
           <div className="eg-section">
             <div className="eg-alert" role="alert"><AlertCircle size={16} aria-hidden="true" /> {error}</div>
           </div>
         )}
-
         {loading && (
           <div className="eg-section">
             <div className="eg-loading"><RefreshCw size={20} className="spin" aria-hidden="true" /> Cargando audios…</div>
@@ -775,16 +776,13 @@ function SessionWorkspace({ community, session, onBack }: {
               <h2 className="eg-section-title">
                 <Music size={18} aria-hidden="true" /> Audios · {session}
               </h2>
-              <button onClick={fetchData} className="eg-refresh-btn" aria-label="Recargar audios">
+              <button onClick={fetchData} className="eg-refresh-btn" aria-label="Recargar">
                 <RefreshCw size={15} aria-hidden="true" /> Actualizar
               </button>
             </div>
 
             {audios.length === 0 && (
-              <div className="eg-empty">
-                <Music size={32} aria-hidden="true" />
-                <p>No se encontraron audios en esta jornada</p>
-              </div>
+              <div className="eg-empty"><Music size={32} aria-hidden="true" /><p>No se encontraron audios en esta jornada</p></div>
             )}
 
             {audios.length > 0 && (
@@ -796,6 +794,10 @@ function SessionWorkspace({ community, session, onBack }: {
                     community={community}
                     session={session}
                     onLabelChange={refreshEstado}
+                    isExpanded={expandedAudio === a.nombre}
+                    onToggle={() => handleToggle(a.nombre)}
+                    pendingTerm={pendingTerm}
+                    onClearPendingTerm={clearPendingTerm}
                   />
                 ))}
               </ul>
@@ -809,6 +811,7 @@ function SessionWorkspace({ community, session, onBack }: {
           community={community}
           session={session}
           onClose={() => setShowGlosario(false)}
+          onSelectTerm={handleSelectTerm}
         />
       )}
     </div>
@@ -842,9 +845,7 @@ function EtiquetadoApp() {
       </div>
       <div className="eg-page-body container">
         <StatsDashboard />
-        <SessionList
-          onSelect={(c, s) => setNav({ view: 'session', community: c, session: s })}
-        />
+        <SessionList onSelect={(c, s) => setNav({ view: 'session', community: c, session: s })} />
       </div>
     </div>
   )

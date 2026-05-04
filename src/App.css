@@ -1086,6 +1086,11 @@ a.contact-card .contact-card-icon { background: var(--blue); color: var(--white)
   display: flex; flex-direction: column; gap: 20px;
 }
 
+.eg-modal-hint {
+  font-size: .76rem; color: var(--gray-500); font-style: italic; margin: 0;
+}
+
+/* ── Glossary term cards (replaces table) ── */
 .eg-glosario-cat {}
 .eg-glosario-cat-title {
   font-size: .72rem; font-weight: 800; color: var(--blue);
@@ -1093,24 +1098,50 @@ a.contact-card .contact-card-icon { background: var(--blue); color: var(--white)
   padding-bottom: 8px; margin-bottom: 8px;
   border-bottom: 2px solid var(--blue-light);
 }
-.eg-glosario-table-wrap { overflow-x: auto; }
-.eg-glosario-table {
-  width: 100%; border-collapse: collapse;
-  font-size: .84rem;
+.eg-glosario-terms {
+  display: flex; flex-direction: column; gap: 4px;
 }
-.eg-glosario-table th {
-  text-align: left; padding: 6px 10px;
-  font-size: .72rem; font-weight: 700; color: var(--gray-600);
-  text-transform: uppercase; letter-spacing: .06em;
-  background: var(--off-white); border-bottom: 1px solid var(--gray-200);
+.eg-glosario-term {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px;
+  width: 100%; text-align: left;
+  padding: 10px 14px; border-radius: var(--r-sm);
+  background: var(--off-white); border: 1.5px solid var(--gray-200);
+  cursor: pointer; font-family: var(--font);
+  transition: background .12s, border-color .15s, transform .1s;
 }
-.eg-glosario-table td {
-  padding: 8px 10px; border-bottom: 1px solid var(--gray-100);
-  color: var(--gray-900); vertical-align: top; line-height: 1.5;
+.eg-glosario-term:hover {
+  background: var(--blue-light);
+  border-color: rgba(1,70,137,.3);
+  transform: translateX(2px);
 }
-.eg-glosario-table tr:last-child td { border-bottom: none; }
-.eg-glosario-traduccion { font-weight: 600; color: var(--blue); }
-.eg-glosario-nota { font-size: .78rem; color: var(--gray-500); font-style: italic; }
+.eg-glosario-term-traduccion {
+  font-size: .95rem; font-weight: 700; color: var(--blue);
+}
+.eg-glosario-term-espanol {
+  font-size: .84rem; color: var(--gray-600);
+}
+.eg-glosario-term-nota {
+  width: 100%;
+  font-size: .75rem; color: var(--gray-500); font-style: italic;
+  margin-top: 2px;
+}
+
+/* ── Pending term banner ── */
+.eg-pending-term {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 10px 16px; border-radius: var(--r-sm);
+  background: var(--blue-light); border: 1.5px solid rgba(1,70,137,.25);
+  color: var(--blue); font-size: .88rem;
+}
+.eg-pending-term strong { font-weight: 700; }
+.eg-pending-term-hint { color: var(--gray-600); }
+.eg-pending-term-dismiss {
+  margin-left: auto; width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 6px; border: none; background: none; cursor: pointer;
+  color: var(--blue); transition: background .12s;
+}
+.eg-pending-term-dismiss:hover { background: rgba(1,70,137,.12); }
 
 /* ══════════════════════════════════════════
    RESPONSIVE — WORKSPACE
