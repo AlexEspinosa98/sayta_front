@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   Lock, Mic, FolderOpen, BarChart2, RefreshCw, AlertCircle,
   Music, BookOpen, Tag, Check, Trash2, Edit2, X, ArrowLeft,
-  ChevronDown, ChevronUp, Clock,
+  ChevronDown, Clock,
 } from 'lucide-react'
 
 const API = (import.meta.env.VITE_API_URL as string | undefined) ?? ''
@@ -504,10 +504,9 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
   onToggle: () => void
   glossaryCategories: GlosarioCategoria[]
 }) {
-  const [mode, setMode]               = useState<LabelMode>('idle')
-  const [inputVal, setInputVal]       = useState(audio.etiqueta ?? '')
-  const [apiError, setApiError]       = useState<string | null>(null)
-  const [showGlosPanel, setShowGlosPanel] = useState(false)
+  const [mode, setMode]         = useState<LabelMode>('idle')
+  const [inputVal, setInputVal] = useState(audio.etiqueta ?? '')
+  const [apiError, setApiError] = useState<string | null>(null)
 
   const audioUrl  = `${API}/api/grabaciones/${community}/${session}/audios/${encodeURIComponent(audio.nombre)}`
   const isLabeled = audio.etiquetado
@@ -515,11 +514,11 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
   const inputId   = `lbl-${audio.nombre.replace(/[^a-z0-9]/gi, '-')}`
 
   function startEdit()  { setInputVal(audio.etiqueta ?? ''); setApiError(null); setMode('editing') }
-  function cancelEdit() { setInputVal(audio.etiqueta ?? ''); setApiError(null); setShowGlosPanel(false); setMode('idle') }
+  function cancelEdit() { setInputVal(audio.etiqueta ?? ''); setApiError(null); setMode('idle') }
 
   async function handleSave() {
     if (!inputVal.trim()) return
-    setMode('saving'); setApiError(null); setShowGlosPanel(false)
+    setMode('saving'); setApiError(null)
     try {
       let res: Response
       if (isLabeled) {
@@ -635,21 +634,6 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
                     autoFocus
                   />
                   <div className="eg-label-input-btns">
-                    {glossaryCategories.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setShowGlosPanel(p => !p)}
-                        className={`eg-btn eg-btn--ghost${showGlosPanel ? ' eg-btn--active' : ''}`}
-                        aria-expanded={showGlosPanel}
-                        aria-label={showGlosPanel ? 'Ocultar glosario' : 'Ver glosario'}
-                      >
-                        <BookOpen size={14} aria-hidden="true" />
-                        Glosario
-                        {showGlosPanel
-                          ? <ChevronUp size={13} aria-hidden="true" />
-                          : <ChevronDown size={13} aria-hidden="true" />}
-                      </button>
-                    )}
                     <button
                       onClick={handleSave}
                       disabled={isBusy || !inputVal.trim()}
@@ -667,11 +651,11 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
                   </div>
                 </div>
 
-                {/* Inline glossary panel: browse categories, click to fill input */}
-                {showGlosPanel && glossaryCategories.length > 0 && (
+                {/* Glossary panel — always visible when in edit mode */}
+                {glossaryCategories.length > 0 && (
                   <GlossaryPanel
                     categories={glossaryCategories}
-                    onSelect={t => { setInputVal(t); setShowGlosPanel(false) }}
+                    onSelect={t => setInputVal(t)}
                   />
                 )}
               </>
