@@ -1,9 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   Plus, Edit2, Trash2, RefreshCw, Upload, Search, X,
-  Loader2, CheckCircle2, AlertCircle,
+  Loader2, CheckCircle2, AlertCircle, Lock, Unlock,
   Zap, BookOpen, Globe, Cpu, RotateCcw, FileJson,
 } from 'lucide-react'
+
+const ADMIN_PASSWORD  = 'Un1m4gd4l3n4'
+const ADMIN_SESS_KEY  = 'glosario_admin_auth'
 
 import {
   useSpecialKeyboard, SpecialKeyboardPanel, SpecialKeyboardToggle,
@@ -75,7 +78,17 @@ interface EmbeddingVersion {
   completed_at: string | null
 }
 
-const POS_OPTIONS = ['NOM', 'VRB', 'ADJ', 'ADV', 'NOM_PR', 'PRON', 'PREP', 'NOM_MASA']
+const POS_OPTIONS = [
+  { value: '',         label: 'Sin definir' },
+  { value: 'NOM',      label: 'NOM — Nombre' },
+  { value: 'VRB',      label: 'VRB — Verbo' },
+  { value: 'ADJ',      label: 'ADJ — Adjetivo' },
+  { value: 'ADV',      label: 'ADV — Adverbio' },
+  { value: 'NOM_PR',   label: 'NOM_PR — Nombre propio' },
+  { value: 'PRON',     label: 'PRON — Pronombre' },
+  { value: 'PREP',     label: 'PREP — Preposición' },
+  { value: 'NOM_MASA', label: 'NOM_MASA — Nombre de masa' },
+]
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 
@@ -96,6 +109,25 @@ function LenguasTab() {
   const [saving, setSaving]     = useState(false)
   const [formErr, setFormErr]   = useState('')
 
+  // ── Admin auth ────────────────────────────────────────────────────────────
+  const [adminAuth, setAdminAuth]   = useState(() => sessionStorage.getItem(ADMIN_SESS_KEY) === '1')
+  const [showGate, setShowGate]     = useState(false)
+  const pendingAction = useRef<(() => void) | null>(null)
+
+  const requireAuth = (action: () => void) => {
+    if (adminAuth) { action(); return }
+    pendingAction.current = action
+    setShowGate(true)
+  }
+  const onAuthSuccess = () => {
+    sessionStorage.setItem(ADMIN_SESS_KEY, '1')
+    setAdminAuth(true)
+    setShowGate(false)
+    pendingAction.current?.()
+    pendingAction.current = null
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   const [form, setForm] = useState({ codigo: '', nombre: '', descripcion: '', activa: true })
 
   const load = useCallback(async () => {
@@ -110,14 +142,15 @@ function LenguasTab() {
 
   useEffect(() => { load() }, [load])
 
-  const openCreate = () => {
+  const openCreate = () => requireAuth(() => {
     setForm({ codigo: '', nombre: '', descripcion: '', activa: true })
     setFormErr(''); setModal('create')
-  }
-  const openEdit = (l: Lengua) => {
+  })
+  const openEdit = (l: Lengua) => requireAuth(() => {
     setForm({ codigo: l.codigo, nombre: l.nombre, descripcion: l.descripcion, activa: l.activa })
     setEditing(l); setFormErr(''); setModal('edit')
-  }
+  })
+  const openDelete = (l: Lengua) => requireAuth(() => setDeleting(l))
   const closeModal = () => { setModal(null); setEditing(null) }
 
   const handleSave = async () => {
@@ -165,6 +198,10 @@ function LenguasTab() {
         <button className="eg-btn eg-btn--ghost" onClick={load} disabled={loading}>
           <RefreshCw size={14} className={loading ? 'spin' : ''} /> Actualizar
         </button>
+        {/* Auth status chip */}
+        <span className={`gl-auth-chip ${adminAuth ? 'gl-auth-chip--open' : ''}`}>
+          {adminAuth ? <><Unlock size={12} /> Admin</>  : <><Lock size={12} /> Bloqueado</>}
+        </span>
       </div>
 
       {error && <div className="gl-alert"><AlertCircle size={16} />{error}</div>}
@@ -202,7 +239,7 @@ function LenguasTab() {
                   <td>
                     <div className="gl-row-actions">
                       <button className="eg-btn eg-btn--ghost" onClick={() => openEdit(l)}><Edit2 size={13} /> Editar</button>
-                      <button className="eg-btn eg-btn--danger" onClick={() => setDeleting(l)}><Trash2 size={13} /> Eliminar</button>
+                      <button className="eg-btn eg-btn--danger" onClick={() => openDelete(l)}><Trash2 size={13} /> Eliminar</button>
                     </div>
                   </td>
                 </tr>
@@ -211,6 +248,9 @@ function LenguasTab() {
           </table>
         </div>
       )}
+
+      {/* Password gate */}
+      {showGate && <AdminGateModal onSuccess={onAuthSuccess} onClose={() => setShowGate(false)} />}
 
       {/* Create / Edit modal */}
       {modal && (
@@ -233,6 +273,58 @@ function LenguasTab() {
           onClose={() => setDeleting(null)}
         />
       )}
+    </div>
+  )
+}
+
+// ── Password gate modal ───────────────────────────────────────────────────────
+
+function AdminGateModal({ onSuccess, onClose }: { onSuccess: () => void; onClose: () => void }) {
+  const [pwd, setPwd]     = useState('')
+  const [err, setErr]     = useState(false)
+  const [shake, setShake] = useState(false)
+  const inputRef          = useRef<HTMLInputElement>(null)
+
+  useEffect(() => { inputRef.current?.focus() }, [])
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (pwd === ADMIN_PASSWORD) {
+      onSuccess()
+    } else {
+      setErr(true); setShake(true); setPwd('')
+      setTimeout(() => setShake(false), 500)
+    }
+  }
+
+  return (
+    <div className="gl-modal-overlay" onClick={onClose}>
+      <div className={`gl-modal gl-gate-modal${shake ? ' eg-shake' : ''}`} onClick={e => e.stopPropagation()}>
+        <div className="gl-modal-header">
+          <span className="gl-gate-icon"><Lock size={20} /></span>
+          <h2 className="gl-modal-title">Acceso de administrador</h2>
+          <button className="vk-floating-close" onClick={onClose} type="button"><X size={18} /></button>
+        </div>
+        <form className="gl-modal-body" onSubmit={handleSubmit}>
+          <p className="gl-gate-hint">Esta acción requiere contraseña de administrador.</p>
+          <input
+            ref={inputRef}
+            type="password"
+            className={`gl-input${err ? ' gl-input--error' : ''}`}
+            placeholder="Contraseña…"
+            value={pwd}
+            onChange={e => { setPwd(e.target.value); setErr(false) }}
+            autoComplete="current-password"
+          />
+          {err && <div className="gl-form-err"><AlertCircle size={14} /> Contraseña incorrecta.</div>}
+          <div className="gl-modal-footer" style={{ padding: 0 }}>
+            <button type="button" className="eg-btn eg-btn--ghost" onClick={onClose}>Cancelar</button>
+            <button type="submit" className="eg-btn eg-btn--primary" disabled={!pwd}>
+              <Unlock size={14} /> Desbloquear
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }
@@ -283,30 +375,38 @@ function LenguaModal({ title, form, setForm, error, saving, onSave, onClose }: {
 // TÉRMINOS TAB
 // ─────────────────────────────────────────────────────────────────────────────
 
+type TerminoFormState = {
+  termino: string; lengua: string; termino_es_texto: string;
+  definicion: string; pos: string; sinonimos: string; ejemplos: string; activo: boolean
+}
+
+function makeEmptyForm(lenguaId: string): TerminoFormState {
+  return { termino: '', lengua: lenguaId, termino_es_texto: '', definicion: '', pos: '', sinonimos: '', ejemplos: '', activo: true }
+}
+
 function TerminosTab({ lenguas }: { lenguas: Lengua[] }) {
-  const [terminos, setTerminos]     = useState<Termino[]>([])
-  const [loading, setLoading]       = useState(false)
-  const [error, setError]           = useState('')
+  const [terminos, setTerminos]         = useState<Termino[]>([])
+  const [loading, setLoading]           = useState(false)
+  const [error, setError]               = useState('')
   const [filterLengua, setFilterLengua] = useState('')
   const [filterSearch, setFilterSearch] = useState('')
-  const [filterPos, setFilterPos]   = useState('')
+  const [filterPos, setFilterPos]       = useState('')
   const [filterActivo, setFilterActivo] = useState('true')
-  const [count, setCount]           = useState(0)
-  const [page, setPage]             = useState(1)
+  const [count, setCount]               = useState(0)
+  const [page, setPage]                 = useState(1)
 
-  const [modal, setModal]       = useState<'create' | 'edit' | 'bulk' | null>(null)
-  const [editing, setEditing]   = useState<Termino | null>(null)
-  const [deleting, setDeleting] = useState<Termino | null>(null)
-  const [restoring, setRestoring] = useState<Termino | null>(null)
-  const [saving, setSaving]     = useState(false)
-  const [formErr, setFormErr]   = useState('')
+  // inline form state
+  const [formMode, setFormMode]   = useState<'create' | 'edit' | null>(null)
+  const [editing, setEditing]     = useState<Termino | null>(null)
+  const [form, setForm]           = useState<TerminoFormState>(makeEmptyForm(''))
+  const [saving, setSaving]       = useState(false)
+  const [formErr, setFormErr]     = useState('')
 
-  const emptyForm = {
-    termino: '', lengua: filterLengua || (lenguas[0]?.id.toString() ?? ''),
-    termino_es_texto: '', definicion: '', pos: 'NOM',
-    sinonimos: '', ejemplos: '', activo: true,
-  }
-  const [form, setForm] = useState(emptyForm)
+  // bulk/confirm modals
+  const [showBulk, setShowBulk]       = useState(false)
+  const [deleting, setDeleting]       = useState<Termino | null>(null)
+  const [restoring, setRestoring]     = useState<Termino | null>(null)
+  const [confirmSaving, setConfirmSaving] = useState(false)
 
   const load = useCallback(async () => {
     if (!filterLengua) { setTerminos([]); setCount(0); return }
@@ -314,7 +414,7 @@ function TerminosTab({ lenguas }: { lenguas: Lengua[] }) {
     try {
       const params = new URLSearchParams({ lengua: filterLengua, page: String(page) })
       if (filterSearch) params.set('search', filterSearch)
-      if (filterPos) params.set('pos', filterPos)
+      if (filterPos)    params.set('pos', filterPos)
       if (filterActivo) params.set('activo', filterActivo)
       const data = await apiFetch(`/terminos/terminos/?${params}`)
       setTerminos(data.results ?? [])
@@ -326,22 +426,21 @@ function TerminosTab({ lenguas }: { lenguas: Lengua[] }) {
   useEffect(() => { load() }, [load])
 
   const openCreate = () => {
-    setForm({ ...emptyForm, lengua: filterLengua || (lenguas[0]?.id.toString() ?? '') })
-    setFormErr(''); setModal('create')
+    setForm(makeEmptyForm(filterLengua || (lenguas[0]?.id.toString() ?? '')))
+    setEditing(null); setFormErr(''); setFormMode('create')
   }
   const openEdit = (t: Termino) => {
     setForm({
-      termino: t.termino,
-      lengua: String(t.lengua),
+      termino: t.termino, lengua: String(t.lengua),
       termino_es_texto: t.termino_es_detail?.termino ?? '',
-      definicion: t.definicion,
-      pos: t.pos,
+      definicion: t.definicion, pos: t.pos,
       sinonimos: t.sinonimos.join(', '),
       ejemplos: t.ejemplos.join('\n'),
       activo: t.activo,
     })
-    setEditing(t); setFormErr(''); setModal('edit')
+    setEditing(t); setFormErr(''); setFormMode('edit')
   }
+  const closeForm = () => { setFormMode(null); setEditing(null) }
 
   const handleSave = async () => {
     if (!form.termino.trim() || !form.lengua) { setFormErr('Término y lengua son requeridos.'); return }
@@ -356,23 +455,19 @@ function TerminosTab({ lenguas }: { lenguas: Lengua[] }) {
         ejemplos: form.ejemplos.split('\n').map(s => s.trim()).filter(Boolean),
         activo: form.activo,
       }
-      // Resolve termino_es by text if provided
       if (form.termino_es_texto.trim()) {
         const es = await apiFetch(`/terminos/terminos-es/?search=${encodeURIComponent(form.termino_es_texto.trim())}`)
         const exact = (es.results ?? []).find((r: TerminoEs) => r.termino === form.termino_es_texto.trim())
-        if (exact) {
-          body.termino_es = exact.id
-        } else {
-          const created = await apiFetch('/terminos/terminos-es/', { method: 'POST', body: JSON.stringify({ termino: form.termino_es_texto.trim() }) })
-          body.termino_es = created.id
-        }
+        body.termino_es = exact
+          ? exact.id
+          : (await apiFetch('/terminos/terminos-es/', { method: 'POST', body: JSON.stringify({ termino: form.termino_es_texto.trim() }) })).id
       }
-      if (modal === 'create') {
+      if (formMode === 'create') {
         await apiFetch('/terminos/terminos/', { method: 'POST', body: JSON.stringify(body) })
       } else if (editing) {
         await apiFetch(`/terminos/terminos/${editing.id}/`, { method: 'PATCH', body: JSON.stringify(body) })
       }
-      setModal(null); setEditing(null); load()
+      closeForm(); load()
     } catch (e: any) {
       setFormErr(e?.termino?.[0] || e?.lengua?.[0] || e?.detail || 'Error al guardar.')
     } finally { setSaving(false) }
@@ -380,27 +475,22 @@ function TerminosTab({ lenguas }: { lenguas: Lengua[] }) {
 
   const handleSoftDelete = async () => {
     if (!deleting) return
-    setSaving(true)
-    try {
-      await apiFetch(`/terminos/terminos/${deleting.id}/`, { method: 'DELETE' })
-      setDeleting(null); load()
-    } catch { } finally { setSaving(false) }
+    setConfirmSaving(true)
+    try { await apiFetch(`/terminos/terminos/${deleting.id}/`, { method: 'DELETE' }); setDeleting(null); load() }
+    catch { } finally { setConfirmSaving(false) }
   }
-
   const handleRestore = async () => {
     if (!restoring) return
-    setSaving(true)
-    try {
-      await apiFetch(`/terminos/terminos/${restoring.id}/restaurar/`, { method: 'POST' })
-      setRestoring(null); load()
-    } catch { } finally { setSaving(false) }
+    setConfirmSaving(true)
+    try { await apiFetch(`/terminos/terminos/${restoring.id}/restaurar/`, { method: 'POST' }); setRestoring(null); load() }
+    catch { } finally { setConfirmSaving(false) }
   }
 
   return (
     <div className="gl-tab-content">
       {/* Filters */}
       <div className="gl-toolbar gl-toolbar--wrap">
-        <select className="gl-select" value={filterLengua} onChange={e => { setFilterLengua(e.target.value); setPage(1) }}>
+        <select className="gl-select" value={filterLengua} onChange={e => { setFilterLengua(e.target.value); setPage(1); setFormMode(null) }}>
           <option value="">— Seleccionar lengua —</option>
           {lenguas.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
         </select>
@@ -410,7 +500,7 @@ function TerminosTab({ lenguas }: { lenguas: Lengua[] }) {
         </div>
         <select className="gl-select gl-select--sm" value={filterPos} onChange={e => { setFilterPos(e.target.value); setPage(1) }}>
           <option value="">Todos los POS</option>
-          {POS_OPTIONS.map(p => <option key={p}>{p}</option>)}
+          {POS_OPTIONS.filter(p => p.value).map(p => <option key={p.value} value={p.value}>{p.value}</option>)}
         </select>
         <select className="gl-select gl-select--sm" value={filterActivo} onChange={e => { setFilterActivo(e.target.value); setPage(1) }}>
           <option value="">Todos</option>
@@ -418,14 +508,28 @@ function TerminosTab({ lenguas }: { lenguas: Lengua[] }) {
           <option value="false">Inactivos</option>
         </select>
         <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
-          <button className="eg-btn eg-btn--primary" onClick={openCreate} disabled={!filterLengua}><Plus size={14} /> Nuevo</button>
-          <button className="eg-btn eg-btn--ghost" onClick={() => setModal('bulk')} disabled={!filterLengua}><FileJson size={14} /> Carga masiva</button>
-          <button className="eg-btn eg-btn--ghost" onClick={load} disabled={loading}><RefreshCw size={13} className={loading ? 'spin' : ''} /></button>
+          <button className="eg-btn eg-btn--primary" onClick={formMode === 'create' ? closeForm : openCreate} disabled={!filterLengua}>
+            {formMode === 'create' ? <><X size={14} /> Cancelar</> : <><Plus size={14} /> Nuevo</>}
+          </button>
+          <button className="eg-btn eg-btn--ghost" onClick={() => setShowBulk(true)} disabled={!filterLengua}><FileJson size={14} /> Carga masiva</button>
+          <button className="eg-btn eg-btn--ghost" onClick={load} disabled={loading} title="Actualizar lista">
+            <RefreshCw size={13} className={loading ? 'spin' : ''} /> Actualizar
+          </button>
         </div>
       </div>
 
       {!filterLengua && <div className="gl-empty"><BookOpen size={32} /><p>Selecciona una lengua para ver sus términos.</p></div>}
       {error && <div className="gl-alert"><AlertCircle size={16} />{error}</div>}
+
+      {/* ── Inline form ── */}
+      {formMode && (
+        <TerminoInlineForm
+          title={formMode === 'create' ? 'Nuevo término' : `Editando: ${editing?.termino}`}
+          form={form} setForm={setForm}
+          lenguas={lenguas} error={formErr} saving={saving}
+          onSave={handleSave} onCancel={closeForm}
+        />
+      )}
 
       {filterLengua && loading ? (
         <div className="gl-loading"><Loader2 size={20} className="spin" /> Cargando términos…</div>
@@ -440,15 +544,17 @@ function TerminosTab({ lenguas }: { lenguas: Lengua[] }) {
               </thead>
               <tbody>
                 {terminos.map(t => (
-                  <tr key={t.id} className={!t.activo ? 'gl-tr--inactive' : ''}>
+                  <tr key={t.id} className={`${!t.activo ? 'gl-tr--inactive' : ''} ${editing?.id === t.id ? 'gl-tr--editing' : ''}`}>
                     <td className="gl-td-bold gl-td-ika">{t.termino}</td>
                     <td>{t.termino_es_detail?.termino ?? '—'}</td>
                     <td className="gl-td-gray gl-td-clamp">{t.definicion || '—'}</td>
-                    <td><span className="gl-badge gl-badge--blue">{t.pos || '—'}</span></td>
+                    <td><span className="gl-badge gl-badge--blue">{t.pos || 'Sin definir'}</span></td>
                     <td><span className={`gl-badge ${t.activo ? 'gl-badge--green' : 'gl-badge--gray'}`}>{t.activo ? 'Activo' : 'Inactivo'}</span></td>
                     <td>
                       <div className="gl-row-actions">
-                        <button className="eg-btn eg-btn--ghost" onClick={() => openEdit(t)}><Edit2 size={13} /></button>
+                        <button className="eg-btn eg-btn--ghost" onClick={() => editing?.id === t.id ? closeForm() : openEdit(t)}>
+                          {editing?.id === t.id ? <><X size={13} /></> : <><Edit2 size={13} /></>}
+                        </button>
                         {t.activo
                           ? <button className="eg-btn eg-btn--danger" onClick={() => setDeleting(t)}><Trash2 size={13} /></button>
                           : <button className="eg-btn eg-btn--ghost" onClick={() => setRestoring(t)}><RotateCcw size={13} /></button>}
@@ -468,80 +574,59 @@ function TerminosTab({ lenguas }: { lenguas: Lengua[] }) {
         </>
       ) : null}
 
-      {modal && modal !== 'bulk' && (
-        <TerminoModal
-          title={modal === 'create' ? 'Nuevo término' : 'Editar término'}
-          form={form} setForm={setForm}
-          lenguas={lenguas} error={formErr} saving={saving}
-          onSave={handleSave} onClose={() => { setModal(null); setEditing(null) }}
-        />
-      )}
-      {modal === 'bulk' && filterLengua && (
-        <BulkModal lenguaId={filterLengua} onClose={() => { setModal(null); load() }} />
+      {showBulk && filterLengua && (
+        <BulkModal lenguaId={filterLengua} onClose={() => { setShowBulk(false); load() }} />
       )}
       {deleting && (
         <ConfirmModal
           title="Desactivar término"
           message={`¿Desactivar "${deleting.termino}"? Se ocultará del motor de búsqueda pero se conservará el registro.`}
-          saving={saving}
-          onConfirm={handleSoftDelete}
-          onClose={() => setDeleting(null)}
+          saving={confirmSaving} onConfirm={handleSoftDelete} onClose={() => setDeleting(null)}
         />
       )}
       {restoring && (
         <ConfirmModal
           title="Restaurar término"
           message={`¿Restaurar "${restoring.termino}" y devolverlo al diccionario activo?`}
-          saving={saving}
-          onConfirm={handleRestore}
-          onClose={() => setRestoring(null)}
+          saving={confirmSaving} onConfirm={handleRestore} onClose={() => setRestoring(null)}
         />
       )}
     </div>
   )
 }
 
-// ── Término modal with special keyboard ───────────────────────────────────────
+// ── Término inline form with special keyboard ─────────────────────────────────
 
-type TerminoFormState = {
-  termino: string; lengua: string; termino_es_texto: string;
-  definicion: string; pos: string; sinonimos: string; ejemplos: string; activo: boolean
-}
-
-function TerminoModal({ title, form, setForm, lenguas, error, saving, onSave, onClose }: {
+function TerminoInlineForm({ title, form, setForm, lenguas, error, saving, onSave, onCancel }: {
   title: string
   form: TerminoFormState
   setForm: (f: TerminoFormState) => void
   lenguas: Lengua[]; error: string; saving: boolean
-  onSave: () => void; onClose: () => void
+  onSave: () => void; onCancel: () => void
 }) {
   const terminoRef  = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
   const definRef    = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
   const sinonRef    = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
   const ejemplosRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
 
-  // One shared keyboard that targets whichever field has focus
   const [activeField, setActiveField] = useState<'termino' | 'definicion' | 'sinonimos' | 'ejemplos'>('termino')
   const activeRef = activeField === 'termino' ? terminoRef
     : activeField === 'definicion' ? definRef
     : activeField === 'sinonimos' ? sinonRef
     : ejemplosRef
-  const activeValue = activeField === 'termino' ? form.termino
-    : activeField === 'definicion' ? form.definicion
-    : activeField === 'sinonimos' ? form.sinonimos
-    : form.ejemplos
+  const activeValue = form[activeField]
   const activeOnChange = (v: string) => setForm({ ...form, [activeField]: v })
-
   const kb = useSpecialKeyboard(activeRef as React.RefObject<HTMLInputElement | HTMLTextAreaElement | null>, activeValue, activeOnChange)
 
   return (
-    <div className="gl-modal-overlay" onClick={onClose}>
-      <div className="gl-modal gl-modal--lg" onClick={e => e.stopPropagation()}>
-        <div className="gl-modal-header">
-          <h2 className="gl-modal-title">{title}</h2>
-          <button className="vk-floating-close" onClick={onClose} type="button"><X size={18} /></button>
+    <>
+      <div className="gl-inline-form">
+        <div className="gl-inline-form-header">
+          <span className="gl-inline-form-title">{title}</span>
+          <button className="eg-btn eg-btn--ghost" onClick={onCancel} type="button"><X size={14} /> Cancelar</button>
         </div>
-        <div className="gl-modal-body">
+
+        <div className="gl-inline-form-body">
           <div className="gl-form-row">
             <Field label="Lengua *">
               <select className="gl-select gl-input" value={form.lengua} onChange={e => setForm({ ...form, lengua: e.target.value })}>
@@ -550,30 +635,31 @@ function TerminoModal({ title, form, setForm, lenguas, error, saving, onSave, on
             </Field>
             <Field label="POS">
               <select className="gl-select gl-input" value={form.pos} onChange={e => setForm({ ...form, pos: e.target.value })}>
-                {POS_OPTIONS.map(p => <option key={p}>{p}</option>)}
+                {POS_OPTIONS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
               </select>
             </Field>
           </div>
 
-          <Field label="Término en lengua indígena *" hint="Foco en este campo para usar el teclado">
-            <input
-              ref={terminoRef as React.RefObject<HTMLInputElement>}
-              className="gl-input gl-input--ika"
-              value={form.termino}
-              onChange={e => setForm({ ...form, termino: e.target.value })}
-              onFocus={() => setActiveField('termino')}
-              placeholder="ej: niria"
-            />
-          </Field>
-
-          <Field label="Equivalente en español">
-            <input
-              className="gl-input"
-              value={form.termino_es_texto}
-              onChange={e => setForm({ ...form, termino_es_texto: e.target.value })}
-              placeholder="ej: agua"
-            />
-          </Field>
+          <div className="gl-form-row">
+            <Field label="Término en lengua indígena *">
+              <input
+                ref={terminoRef as React.RefObject<HTMLInputElement>}
+                className="gl-input gl-input--ika"
+                value={form.termino}
+                onChange={e => setForm({ ...form, termino: e.target.value })}
+                onFocus={() => setActiveField('termino')}
+                placeholder="ej: niria"
+              />
+            </Field>
+            <Field label="Equivalente en español">
+              <input
+                className="gl-input"
+                value={form.termino_es_texto}
+                onChange={e => setForm({ ...form, termino_es_texto: e.target.value })}
+                placeholder="ej: agua"
+              />
+            </Field>
+          </div>
 
           <Field label="Definición">
             <textarea
@@ -587,49 +673,53 @@ function TerminoModal({ title, form, setForm, lenguas, error, saving, onSave, on
             />
           </Field>
 
-          <Field label="Sinónimos" hint="Separados por comas">
-            <input
-              ref={sinonRef as React.RefObject<HTMLInputElement>}
-              className="gl-input gl-input--ika"
-              value={form.sinonimos}
-              onChange={e => setForm({ ...form, sinonimos: e.target.value })}
-              onFocus={() => setActiveField('sinonimos')}
-              placeholder="niriaa, niri"
-            />
-          </Field>
-
-          <Field label="Ejemplos" hint="Un ejemplo por línea">
-            <textarea
-              ref={ejemplosRef as React.RefObject<HTMLTextAreaElement>}
-              className="gl-input gl-textarea gl-input--ika"
-              value={form.ejemplos}
-              onChange={e => setForm({ ...form, ejemplos: e.target.value })}
-              onFocus={() => setActiveField('ejemplos')}
-              rows={3}
-              placeholder="niria naka mutu"
-            />
-          </Field>
-
-          <label className="gl-checkbox-row">
-            <input type="checkbox" checked={form.activo} onChange={e => setForm({ ...form, activo: e.target.checked })} />
-            <span>Término activo</span>
-          </label>
-
-          {/* Keyboard toggle */}
-          <div className="gl-kb-row">
-            <SpecialKeyboardToggle open={kb.open} onToggle={() => kb.open ? kb.setOpen(false) : kb.openKeyboard()} />
-            {kb.open && <span className="gl-kb-hint">Campo activo: <strong>{activeField}</strong></span>}
+          <div className="gl-form-row">
+            <Field label="Sinónimos" hint="separados por comas">
+              <input
+                ref={sinonRef as React.RefObject<HTMLInputElement>}
+                className="gl-input gl-input--ika"
+                value={form.sinonimos}
+                onChange={e => setForm({ ...form, sinonimos: e.target.value })}
+                onFocus={() => setActiveField('sinonimos')}
+                placeholder="niriaa, niri"
+              />
+            </Field>
+            <Field label="Ejemplos" hint="uno por línea">
+              <textarea
+                ref={ejemplosRef as React.RefObject<HTMLTextAreaElement>}
+                className="gl-input gl-textarea gl-input--ika"
+                value={form.ejemplos}
+                onChange={e => setForm({ ...form, ejemplos: e.target.value })}
+                onFocus={() => setActiveField('ejemplos')}
+                rows={2}
+                placeholder="niria naka mutu"
+              />
+            </Field>
           </div>
 
-          {error && <div className="gl-form-err"><AlertCircle size={14} />{error}</div>}
-        </div>
-        <div className="gl-modal-footer">
-          <button className="eg-btn eg-btn--ghost" onClick={onClose}>Cancelar</button>
-          <button className="eg-btn eg-btn--primary" onClick={onSave} disabled={saving}>
-            {saving ? <><Loader2 size={14} className="spin" /> Guardando…</> : 'Guardar'}
-          </button>
+          <div className="gl-inline-form-footer">
+            <label className="gl-checkbox-row">
+              <input type="checkbox" checked={form.activo} onChange={e => setForm({ ...form, activo: e.target.checked })} />
+              <span>Término activo</span>
+            </label>
+
+            <div className="gl-kb-row">
+              <SpecialKeyboardToggle open={kb.open} onToggle={() => kb.open ? kb.setOpen(false) : kb.openKeyboard()} />
+              {kb.open && <span className="gl-kb-hint">Campo: <strong>{activeField}</strong></span>}
+            </div>
+
+            {error && <div className="gl-form-err"><AlertCircle size={14} />{error}</div>}
+
+            <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
+              <button className="eg-btn eg-btn--ghost" onClick={onCancel}>Cancelar</button>
+              <button className="eg-btn eg-btn--primary" onClick={onSave} disabled={saving}>
+                {saving ? <><Loader2 size={14} className="spin" /> Guardando…</> : 'Guardar término'}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
+
       <SpecialKeyboardPanel
         open={kb.open}
         onClose={() => kb.setOpen(false)}
@@ -638,7 +728,7 @@ function TerminoModal({ title, form, setForm, lenguas, error, saving, onSave, on
         onSpace={() => kb.insertAtCursor(' ')}
         onEnter={() => kb.insertAtCursor('\n')}
       />
-    </div>
+    </>
   )
 }
 
@@ -743,6 +833,26 @@ function BulkModal({ lenguaId, onClose }: { lenguaId: string; onClose: () => voi
 // ─────────────────────────────────────────────────────────────────────────────
 
 function EmbeddingsTab({ lenguas }: { lenguas: Lengua[] }) {
+  // ── Gate ──────────────────────────────────────────────────────────────────
+  const [adminAuth, setAdminAuth] = useState(() => sessionStorage.getItem(ADMIN_SESS_KEY) === '1')
+  const [pwd, setPwd]             = useState('')
+  const [pwdErr, setPwdErr]       = useState(false)
+  const [shake, setShake]         = useState(false)
+  const pwdRef                    = useRef<HTMLInputElement>(null)
+  useEffect(() => { if (!adminAuth) pwdRef.current?.focus() }, [adminAuth])
+
+  const handleGate = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (pwd === ADMIN_PASSWORD) {
+      sessionStorage.setItem(ADMIN_SESS_KEY, '1')
+      setAdminAuth(true)
+    } else {
+      setPwdErr(true); setShake(true); setPwd('')
+      setTimeout(() => setShake(false), 500)
+    }
+  }
+
+  // ── Content ───────────────────────────────────────────────────────────────
   const [filterLengua, setFilterLengua] = useState('')
   const [versions, setVersions]         = useState<EmbeddingVersion[]>([])
   const [loading, setLoading]           = useState(false)
@@ -761,9 +871,8 @@ function EmbeddingsTab({ lenguas }: { lenguas: Lengua[] }) {
     finally { setLoading(false) }
   }, [filterLengua])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { if (adminAuth) load() }, [adminAuth, load])
 
-  // Poll generating task
   useEffect(() => {
     if (!pollingId) return
     const iv = setInterval(async () => {
@@ -806,6 +915,35 @@ function EmbeddingsTab({ lenguas }: { lenguas: Lengua[] }) {
     return <span className="gl-badge gl-badge--gray">{v.status_display}</span>
   }
 
+  // ── Gate screen ───────────────────────────────────────────────────────────
+  if (!adminAuth) {
+    return (
+      <div className="gl-tab-content">
+        <div className={`gl-emb-gate${shake ? ' eg-shake' : ''}`}>
+          <div className="gl-emb-gate-icon"><Lock size={28} /></div>
+          <h2 className="gl-emb-gate-title">Acceso restringido</h2>
+          <p className="gl-emb-gate-sub">Los embeddings solo pueden consultarse con contraseña de administrador.</p>
+          <form className="gl-emb-gate-form" onSubmit={handleGate}>
+            <input
+              ref={pwdRef}
+              type="password"
+              className={`gl-input${pwdErr ? ' gl-input--error' : ''}`}
+              placeholder="Contraseña de administrador…"
+              value={pwd}
+              onChange={e => { setPwd(e.target.value); setPwdErr(false) }}
+              autoComplete="current-password"
+            />
+            {pwdErr && <div className="gl-form-err"><AlertCircle size={14} /> Contraseña incorrecta.</div>}
+            <button type="submit" className="eg-btn eg-btn--primary" disabled={!pwd}>
+              <Unlock size={14} /> Acceder
+            </button>
+          </form>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Authenticated content ─────────────────────────────────────────────────
   return (
     <div className="gl-tab-content">
       <div className="gl-toolbar">
@@ -817,6 +955,7 @@ function EmbeddingsTab({ lenguas }: { lenguas: Lengua[] }) {
           {generating || pollingId ? <><Loader2 size={14} className="spin" /> Generando…</> : <><Zap size={14} /> Generar embeddings</>}
         </button>
         <button className="eg-btn eg-btn--ghost" onClick={load} disabled={loading}><RefreshCw size={13} className={loading ? 'spin' : ''} /></button>
+        <span className="gl-auth-chip gl-auth-chip--open"><Unlock size={12} /> Admin</span>
       </div>
 
       {pollingId && (
@@ -829,9 +968,7 @@ function EmbeddingsTab({ lenguas }: { lenguas: Lengua[] }) {
       {error  && <div className="gl-alert"><AlertCircle size={16} />{error}</div>}
 
       {!filterLengua && <div className="gl-empty"><Cpu size={32} /><p>Selecciona una lengua para ver sus embeddings.</p></div>}
-
       {filterLengua && loading && <div className="gl-loading"><Loader2 size={20} className="spin" /> Cargando…</div>}
-
       {filterLengua && !loading && versions.length === 0 && (
         <div className="gl-empty"><Cpu size={32} /><p>No hay versiones de embedding para esta lengua.</p></div>
       )}

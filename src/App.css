@@ -1805,8 +1805,80 @@ a.contact-card .contact-card-icon { background: var(--blue); color: var(--white)
 .gl-bulk-errors { margin-top: 8px; padding-left: 16px; display: flex; flex-direction: column; gap: 4px; list-style: none; }
 .gl-bulk-errors li { display: flex; align-items: center; gap: 6px; font-size: .8rem; }
 
+/* ── Admin auth chip ── */
+.gl-auth-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 999px;
+  font-size: .72rem; font-weight: 700;
+  background: var(--gray-100); color: var(--gray-500);
+  border: 1px solid var(--gray-200);
+  user-select: none;
+}
+.gl-auth-chip--open {
+  background: #dcfce7; color: #166534; border-color: #bbf7d0;
+}
+
+/* ── Password gate modal extras ── */
+.gl-gate-modal { max-width: 380px; }
+.gl-gate-icon {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: var(--blue-light); color: var(--blue);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.gl-gate-hint { font-size: .88rem; color: var(--gray-600); }
+.gl-input--error {
+  border-color: var(--red) !important;
+  box-shadow: 0 0 0 3px rgba(133,0,47,.1) !important;
+}
+
+/* ── Embeddings gate ── */
+.gl-emb-gate {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 14px; padding: clamp(40px, 8vw, 72px) 24px;
+  max-width: 400px; margin: 0 auto; text-align: center;
+}
+.gl-emb-gate-icon {
+  width: 64px; height: 64px; border-radius: 50%;
+  background: var(--blue-light); color: var(--blue);
+  display: flex; align-items: center; justify-content: center;
+}
+.gl-emb-gate-title { font-size: 1.2rem; font-weight: 800; color: var(--blue); }
+.gl-emb-gate-sub   { font-size: .9rem; color: var(--gray-600); line-height: 1.55; }
+.gl-emb-gate-form  { display: flex; flex-direction: column; gap: 10px; width: 100%; margin-top: 6px; }
+
+/* ── Inline term form ── */
+.gl-inline-form {
+  background: var(--white);
+  border: 2px solid var(--blue);
+  border-radius: var(--r);
+  box-shadow: 0 4px 24px rgba(1,70,137,.14);
+  overflow: hidden;
+}
+.gl-inline-form-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 18px;
+  background: var(--blue-light);
+  border-bottom: 1px solid rgba(1,70,137,.18);
+}
+.gl-inline-form-title {
+  font-size: .88rem; font-weight: 700; color: var(--blue);
+}
+.gl-inline-form-body {
+  padding: 18px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.gl-inline-form-footer {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding-top: 4px;
+}
+
+/* highlight row being edited */
+.gl-tr--editing { background: #fffbeb !important; outline: 2px solid #fbbf24; outline-offset: -2px; }
+
 @media (max-width: 600px) {
   .gl-form-row { grid-template-columns: 1fr; }
   .gl-tabs     { overflow-x: auto; }
   .gl-tab      { white-space: nowrap; }
+  .gl-inline-form-footer { flex-direction: column; align-items: flex-start; }
 }
