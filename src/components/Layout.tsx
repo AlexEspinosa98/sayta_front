@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { BookOpen, Home } from 'lucide-react'
+import { BookOpen, Home, Library } from 'lucide-react'
 
 const CDN = 'https://cdn.unimagdalena.edu.co/images'
 
@@ -53,6 +53,15 @@ export default function Layout() {
                 >
                   <Home size={15} aria-hidden="true" />
                   <span>Traductor</span>
+                </NavLink>
+              </li>
+              <li>
+                <NavLink
+                  to="/glosario"
+                  className={({ isActive }) => `nav-link${isActive ? ' nav-link-active' : ''}`}
+                >
+                  <Library size={15} aria-hidden="true" />
+                  <span>Glosario</span>
                 </NavLink>
               </li>
               <li>

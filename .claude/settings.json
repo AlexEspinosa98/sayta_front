@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' --headless=new --disable-gpu --no-sandbox --print-to-pdf=/tmp/Manual_Etiquetado_SAYTA.pdf --print-to-pdf-no-header --no-pdf-header-footer file:///tmp/manual_etiquetado_sayta.html)",
+      "Bash(python3 -c \"import weasyprint; print\\('weasyprint ok'\\)\")",
+      "Bash(npx --yes puppeteer-cli@latest pdf /tmp/manual_etiquetado_sayta.html /tmp/Manual_Etiquetado_SAYTA.pdf)",
+      "Bash(python3 -c \"import pdfkit\")",
+      "Bash(python3 -c \"from weasyprint import HTML; HTML\\(filename='/tmp/manual_etiquetado_sayta.html'\\).write_pdf\\('/tmp/Manual_Etiquetado_SAYTA.pdf'\\); print\\('OK'\\)\")",
+      "Bash(open /Users/alex_espinosa/Documents/New_order/Unimagdalena/traductor/front/Manual_Etiquetado_SAYTA.pdf)",
+      "Bash(python3 -c ' *)",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5174/glosario)",
+      "Bash(awk 'NR>=1374' /Users/alex_espinosa/Documents/New_order/Unimagdalena/traductor/front/src/App.css)"
+    ]
+  }
+}

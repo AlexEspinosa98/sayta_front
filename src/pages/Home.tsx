@@ -3,6 +3,9 @@ import {
   Mic, MicOff, Upload, Languages,
   ArrowRightLeft, Loader2, Volume2, Copy, Check,
 } from 'lucide-react'
+import {
+  useSpecialKeyboard, SpecialKeyboardPanel, SpecialKeyboardToggle,
+} from '../components/SpecialKeyboard'
 
 type Language = 'arhuaco' | 'kogui'
 type InputMode = 'text' | 'audio'
@@ -19,8 +22,11 @@ export default function Home() {
   const [isRecording, setIsRecording] = useState(false)
   const [copied, setCopied]         = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const textareaRef  = useRef<HTMLTextAreaElement>(null)
   const textareaId   = useId()
   const resultId     = useId()
+
+  const kb = useSpecialKeyboard(textareaRef, inputText, setInputText)
 
   const canTranslate =
     inputMode === 'text' ? inputText.trim().length > 0 : audioFile !== null || isRecording
@@ -129,6 +135,7 @@ export default function Home() {
                 Texto en {LANG_LABELS[language]}
               </label>
               <textarea
+                ref={textareaRef}
                 id={textareaId}
                 className="tc-textarea"
                 placeholder={`Escribe en ${LANG_LABELS[language]}…`}
@@ -141,6 +148,9 @@ export default function Home() {
               <span className="tc-char-count" aria-live="polite" aria-atomic="true">
                 {inputText.length} {inputText.length === 1 ? 'carácter' : 'caracteres'}
               </span>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 6 }}>
+                <SpecialKeyboardToggle open={kb.open} onToggle={() => kb.open ? kb.setOpen(false) : kb.openKeyboard()} />
+              </div>
             </div>
           ) : (
             <div className="tc-audio" role="group" aria-label="Entrada de audio">
@@ -242,6 +252,14 @@ export default function Home() {
 
         </div>
       </div>
+      <SpecialKeyboardPanel
+        open={kb.open}
+        onClose={() => kb.setOpen(false)}
+        onInsert={kb.insertAtCursor}
+        onDelete={kb.deleteChar}
+        onSpace={() => kb.insertAtCursor(' ')}
+        onEnter={() => kb.insertAtCursor('\n')}
+      />
     </section>
   )
 }
