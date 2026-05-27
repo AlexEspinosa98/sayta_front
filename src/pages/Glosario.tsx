@@ -14,7 +14,7 @@ import {
 
 // ── API base ──────────────────────────────────────────────────────────────────
 
-const API = 'http://localhost:8000/api'
+const API = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
 
 async function apiFetch(path: string, opts?: RequestInit) {
   const res = await fetch(`${API}${path}`, {
