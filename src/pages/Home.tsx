@@ -2,7 +2,7 @@ import { useState, useRef, useId, useEffect } from 'react'
 import {
   Mic, MicOff, Upload, Languages,
   Loader2, Volume2, Copy, Check, AlertCircle,
-  ArrowRight, ArrowLeft, ArrowRightLeft,
+  ArrowRight, ArrowLeft, ArrowRightLeft, Star,
 } from 'lucide-react'
 import {
   useSpecialKeyboard, SpecialKeyboardPanel, SpecialKeyboardToggle,
@@ -17,28 +17,41 @@ interface Lengua {
   embedding_activo: object | null
 }
 
-interface ResultadoItem { termino: string; definicion: string; score: number }
+interface ResultadoItem {
+  termino: string
+  termino_es: string
+  definicion: string
+  score: number
+  probabilidad: number
+  mejor_coincidencia: boolean
+  coincidencia: string
+}
 
 interface TraduccionResponse {
   texto_entrada: string
   lengua: { id: number; codigo: string; nombre: string }
   embedding: { version_id: string; version: string; modelo: string; num_terminos: number }
   direccion: string
+  conclusion: {
+    termino: string
+    termino_es: string
+    definicion: string
+    probabilidad: number
+  }
   resultados: ResultadoItem[]
 }
 
 type Direccion = 'es_a_lengua' | 'lengua_a_es'
 type InputMode = 'text' | 'audio'
 
-// ── Score helpers ─────────────────────────────────────────────────────────────
+// ── Probability badge ─────────────────────────────────────────────────────────
 
-function ScoreBadge({ score }: { score: number }) {
-  const pct = Math.round(score * 100)
-  const cls = score >= 0.85 ? 'tc-score--high' : score >= 0.7 ? 'tc-score--mid' : 'tc-score--low'
+function ProbBadge({ prob }: { prob: number }) {
+  const cls = prob >= 50 ? 'tc-score--high' : prob >= 25 ? 'tc-score--mid' : 'tc-score--low'
   return (
     <div className={`tc-score-wrap ${cls}`}>
-      <span className="tc-score-pct">{pct}%</span>
-      <div className="tc-score-bar"><div className="tc-score-fill" style={{ width: `${pct}%` }} /></div>
+      <span className="tc-score-pct">{prob.toFixed(1)}%</span>
+      <div className="tc-score-bar"><div className="tc-score-fill" style={{ width: `${prob}%` }} /></div>
     </div>
   )
 }
@@ -60,6 +73,7 @@ export default function Home() {
 
   // Result
   const [result, setResult]             = useState<TraduccionResponse | null>(null)
+  const [selectedIdx, setSelectedIdx]   = useState<number>(0)
   const [apiError, setApiError]         = useState('')
   const [isLoading, setIsLoading]       = useState(false)
   const [copied, setCopied]             = useState(false)
@@ -71,7 +85,6 @@ export default function Home() {
   const resultId     = useId()
   const kb = useSpecialKeyboard(textareaRef, inputText, setInputText)
 
-  // Load languages on mount
   useEffect(() => {
     fetch(`${API}/terminos/lenguas/?page_size=50`)
       .then(r => r.json())
@@ -111,23 +124,25 @@ export default function Home() {
         )
       } else {
         setResult(data)
+        const best = (data.resultados as ResultadoItem[]).findIndex(r => r.mejor_coincidencia)
+        setSelectedIdx(best >= 0 ? best : 0)
       }
     } catch {
       setApiError('No se pudo conectar con el servidor.')
     } finally { setIsLoading(false) }
   }
 
+  const selected = result?.resultados[selectedIdx] ?? null
+
   const handleCopy = async () => {
-    if (!result) return
-    const text = result.resultados
-      .map((r, i) => `${i + 1}. ${r.termino} — ${r.definicion} (${Math.round(r.score * 100)}%)`)
-      .join('\n')
+    if (!selected) return
+    const text = `${selected.termino} (${selected.termino_es}) — ${selected.definicion} · ${selected.probabilidad.toFixed(1)}%`
     await navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // ── Input label / placeholder ───────────────────────────────────────────────
+  // ── Labels ──────────────────────────────────────────────────────────────────
   const langName = selectedLengua?.nombre ?? 'lengua indígena'
   const inputLabel = direccion === 'es_a_lengua'
     ? 'Texto en español'
@@ -138,6 +153,8 @@ export default function Home() {
   const dirLabel = direccion === 'es_a_lengua'
     ? `Español → ${langName}`
     : `${langName} → Español`
+
+  const bestIdx = result ? result.resultados.findIndex(r => r.mejor_coincidencia) : -1
 
   return (
     <section className="translator-page" aria-labelledby="translator-heading">
@@ -177,7 +194,7 @@ export default function Home() {
                       title={l.embedding_activo ? 'Embedding activo' : 'Sin embedding activo'}
                     >
                       {l.nombre}
-                      {!l.embedding_activo && <span className="lang-pill-warn" aria-label="Sin embedding">·</span>}
+                      {!l.embedding_activo && <span className="lang-pill-warn" aria-label="Sin embedding" />}
                     </button>
                   ))
                 )}
@@ -337,42 +354,77 @@ export default function Home() {
           )}
 
           {/* ── Resultado ──────────────────────────────────── */}
-          {result && !isLoading && (
-            <div id={resultId} role="status" aria-live="polite" aria-label="Resultados">
-              {/* Header */}
-              <div className="tc-results-header">
-                <div className="tc-results-dir">
-                  <ArrowRightLeft size={13} aria-hidden="true" />
-                  <strong>{result.direccion}</strong>
-                  <span className="tc-results-sep">·</span>
-                  <span className="tc-results-query">"{result.texto_entrada}"</span>
+          {result && !isLoading && selected && (
+            <div id={resultId} role="status" aria-live="polite" aria-label="Resultados de traducción">
+
+              {/* ── Conclusión ─────────────────────────────── */}
+              <div className="tc-conclusion">
+                <div className="tc-conclusion-head">
+                  <span className="tc-conclusion-badge">
+                    <Star size={11} aria-hidden="true" />
+                    {selectedIdx === bestIdx ? 'Mejor coincidencia' : 'Opción seleccionada'}
+                  </span>
+                  <button type="button" className="copy-btn" onClick={handleCopy}
+                    aria-label={copied ? 'Copiado' : 'Copiar traducción'}>
+                    {copied
+                      ? <><Check size={13} aria-hidden="true" /> Copiado</>
+                      : <><Copy size={13} aria-hidden="true" /> Copiar</>}
+                  </button>
                 </div>
-                <button type="button" className="copy-btn" onClick={handleCopy}
-                  aria-label={copied ? 'Copiado' : 'Copiar resultados'}>
-                  {copied
-                    ? <><Check size={13} aria-hidden="true" /> Copiado</>
-                    : <><Copy size={13} aria-hidden="true" /> Copiar</>}
-                </button>
+                <div className="tc-conclusion-body">
+                  <div className="tc-conclusion-terms">
+                    <span className="tc-conclusion-term">{selected.termino}</span>
+                    <span className="tc-conclusion-sep" aria-hidden="true">·</span>
+                    <span className="tc-conclusion-es">{selected.termino_es}</span>
+                  </div>
+                  <p className="tc-conclusion-def">{selected.definicion}</p>
+                </div>
+                <div className="tc-conclusion-foot">
+                  <span className="tc-conclusion-prob-num">{selected.probabilidad.toFixed(1)}%</span>
+                  <span className="tc-conclusion-prob-label">de probabilidad</span>
+                  <div className="tc-conclusion-bar">
+                    <div className="tc-conclusion-fill" style={{ width: `${selected.probabilidad}%` }} />
+                  </div>
+                </div>
               </div>
 
-              {/* Result cards */}
-              <div className="tc-results-list" aria-label="Términos más cercanos">
+              {/* ── Opciones ───────────────────────────────── */}
+              <p className="tc-opts-label">Elige una opción:</p>
+              <div className="tc-results-list" role="radiogroup" aria-label="Opciones de traducción">
                 {result.resultados.map((r, i) => (
-                  <div key={i} className="tc-result-card">
-                    <span className="tc-result-rank" aria-label={`Posición ${i + 1}`}>#{i + 1}</span>
+                  <button
+                    key={i}
+                    type="button"
+                    role="radio"
+                    aria-checked={selectedIdx === i}
+                    className={[
+                      'tc-result-card',
+                      selectedIdx === i ? 'tc-result-card--selected' : '',
+                      r.mejor_coincidencia ? 'tc-result-card--best' : '',
+                    ].join(' ').trim()}
+                    onClick={() => setSelectedIdx(i)}
+                  >
+                    <span className="tc-result-rank" aria-label={`Opción ${i + 1}`}>#{i + 1}</span>
                     <div className="tc-result-body">
-                      <span className="tc-result-term">{r.termino}</span>
+                      <span className="tc-result-term">
+                        {r.termino}
+                        {r.mejor_coincidencia && (
+                          <span className="tc-result-best-tag" aria-label="Mejor coincidencia">★</span>
+                        )}
+                      </span>
+                      <span className="tc-result-es">{r.termino_es}</span>
                       <span className="tc-result-def">{r.definicion}</span>
                     </div>
-                    <ScoreBadge score={r.score} />
-                  </div>
+                    <ProbBadge prob={r.probabilidad} />
+                  </button>
                 ))}
               </div>
 
-              {/* Embedding info */}
+              {/* ── Info embedding ─────────────────────────── */}
               <p className="tc-emb-info">
                 Embedding {result.embedding.version} · {result.embedding.num_terminos.toLocaleString()} términos · {result.embedding.modelo}
               </p>
+
             </div>
           )}
 

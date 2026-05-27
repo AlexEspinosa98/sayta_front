@@ -1963,8 +1963,91 @@ a.contact-card .contact-card-icon { background: var(--blue); color: var(--white)
   text-align: right;
 }
 
+/* Conclusion card */
+.tc-conclusion {
+  background: linear-gradient(135deg, var(--blue-dark) 0%, var(--blue) 100%);
+  border-radius: var(--r); padding: 18px 20px;
+  display: flex; flex-direction: column; gap: 12px;
+  box-shadow: 0 4px 20px rgba(1,70,137,.25);
+}
+.tc-conclusion-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.tc-conclusion-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: rgba(255,255,255,.18); color: var(--white);
+  font-size: .72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+  padding: 4px 10px; border-radius: 999px;
+}
+.tc-conclusion-body { display: flex; flex-direction: column; gap: 6px; }
+.tc-conclusion-terms {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+}
+.tc-conclusion-term {
+  font-size: 1.6rem; font-weight: 800; color: var(--white); letter-spacing: -.01em;
+}
+.tc-conclusion-sep { color: rgba(255,255,255,.4); font-size: 1.2rem; }
+.tc-conclusion-es {
+  font-size: .97rem; color: rgba(255,255,255,.7); font-weight: 500;
+}
+.tc-conclusion-def {
+  font-size: .88rem; color: rgba(255,255,255,.82); line-height: 1.55; margin: 0;
+}
+.tc-conclusion-foot {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.tc-conclusion-prob-num {
+  font-size: 1.1rem; font-weight: 800; color: var(--white);
+}
+.tc-conclusion-prob-label {
+  font-size: .78rem; color: rgba(255,255,255,.6); margin-right: 4px;
+}
+.tc-conclusion-bar {
+  flex: 1; min-width: 60px; max-width: 140px;
+  height: 6px; border-radius: 999px;
+  background: rgba(255,255,255,.2); overflow: hidden;
+}
+.tc-conclusion-fill {
+  height: 100%; border-radius: 999px;
+  background: rgba(255,255,255,.85);
+  transition: width .5s ease;
+}
+
+/* "Elige una opción" label */
+.tc-opts-label {
+  font-size: .78rem; font-weight: 700; color: var(--gray-500);
+  text-transform: uppercase; letter-spacing: .07em;
+  margin: 14px 0 6px;
+}
+
+/* Result cards — now buttons */
+.tc-result-card {
+  width: 100%;
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 12px 16px; text-align: left;
+  background: var(--white); border: 1.5px solid var(--gray-200); border-radius: var(--r-sm);
+  font-family: var(--font); cursor: pointer;
+  transition: border-color .15s, box-shadow .15s, background .15s;
+}
+.tc-result-card:hover { border-color: var(--blue); box-shadow: 0 2px 10px rgba(1,70,137,.1); }
+.tc-result-card--selected {
+  border-color: var(--blue) !important;
+  background: var(--blue-light) !important;
+  box-shadow: 0 2px 12px rgba(1,70,137,.15) !important;
+}
+.tc-result-card--best { border-color: rgba(1,70,137,.3); }
+
+.tc-result-es {
+  font-size: .78rem; color: var(--gray-400); font-style: italic;
+}
+.tc-result-best-tag {
+  margin-left: 6px; font-size: .75rem; color: #d97706;
+  vertical-align: middle;
+}
+
 @media (max-width: 480px) {
   .tc-result-card { flex-wrap: wrap; }
   .tc-score-wrap  { flex-direction: row; align-items: center; gap: 8px; width: 100%; }
   .tc-score-bar   { flex: 1; }
+  .tc-conclusion-term { font-size: 1.3rem; }
 }
