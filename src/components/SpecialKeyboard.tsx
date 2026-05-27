@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect, useRef, RefObject } from 'react'
-import { Delete, Keyboard, X, ChevronDown } from 'lucide-react'
+import { useState, useCallback, useEffect, RefObject } from 'react'
+import { Delete, Keyboard, ChevronDown } from 'lucide-react'
 
 // ── Alphabet data ─────────────────────────────────────────────────────────────
 
@@ -110,7 +110,7 @@ export function useSpecialKeyboard(
   return { open, setOpen, openKeyboard, insertAtCursor, deleteChar }
 }
 
-// ── Floating panel ────────────────────────────────────────────────────────────
+// ── Inline panel ─────────────────────────────────────────────────────────────
 
 interface SpecialKeyboardPanelProps {
   open: boolean
@@ -123,65 +123,52 @@ interface SpecialKeyboardPanelProps {
 }
 
 export function SpecialKeyboardPanel({
-  open, onClose, onInsert, onDelete, onSpace, onEnter, title = 'Caracteres especiales — Ika',
+  open, onInsert, onDelete, onSpace, onEnter,
 }: SpecialKeyboardPanelProps) {
-  const panelRef = useRef<HTMLDivElement>(null)
   if (!open) return null
   return (
-    <>
-      <div className="vk-overlay" onClick={onClose} aria-hidden="true" />
-      <div ref={panelRef} className="vk-floating" role="dialog" aria-label={title} aria-modal="false">
-        <div className="vk-floating-header">
-          <span className="vk-floating-title">
-            <Keyboard size={15} aria-hidden="true" />
-            {title}
-          </span>
-          <button className="vk-floating-close" onClick={onClose} aria-label="Cerrar teclado" type="button">
-            <X size={18} />
+    <div className="vk-inline" role="group" aria-label="Teclado de caracteres especiales">
+      <div className="vk-quick-actions">
+        <button className="vk-action-btn" onClick={onDelete} type="button" aria-label="Borrar">
+          <Delete size={13} aria-hidden="true" /> Borrar
+        </button>
+        <button className="vk-action-btn" onClick={onSpace} type="button" aria-label="Espacio">
+          Espacio
+        </button>
+        {onEnter && (
+          <button className="vk-action-btn" onClick={onEnter} type="button" aria-label="Nueva línea">
+            ↵ Enter
           </button>
-        </div>
-        <div className="vk-quick-actions">
-          <button className="vk-action-btn" onClick={onDelete} type="button" aria-label="Borrar">
-            <Delete size={13} aria-hidden="true" /> Borrar
-          </button>
-          <button className="vk-action-btn" onClick={onSpace} type="button" aria-label="Espacio">
-            Espacio
-          </button>
-          {onEnter && (
-            <button className="vk-action-btn" onClick={onEnter} type="button" aria-label="Nueva línea">
-              ↵ Enter
-            </button>
-          )}
-        </div>
-        <div className="vk-floating-body">
-          {ALPHABET.map(section => (
-            <div key={section.title} className="vk-section">
-              <p className="vk-section-label">{section.title}</p>
-              <div className="vk-groups">
-                {section.groups.map(group => (
-                  <div key={group.label} className="vk-group">
-                    <span className="vk-group-label">{group.label}</span>
-                    <div className="vk-group-chars">
-                      {group.chars.map((c, i) => (
-                        <button
-                          key={i}
-                          className="vk-char-btn"
-                          onClick={() => onInsert(c.char)}
-                          aria-label={`Insertar ${c.char}`}
-                          type="button"
-                        >
-                          {c.char}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
+        )}
       </div>
-    </>
+      <div className="vk-inline-body">
+        {ALPHABET.map(section => (
+          <div key={section.title} className="vk-section">
+            <p className="vk-section-label">{section.title}</p>
+            <div className="vk-groups">
+              {section.groups.map(group => (
+                <div key={group.label} className="vk-group">
+                  <span className="vk-group-label">{group.label}</span>
+                  <div className="vk-group-chars">
+                    {group.chars.map((c, i) => (
+                      <button
+                        key={i}
+                        className="vk-char-btn"
+                        onClick={() => onInsert(c.char)}
+                        aria-label={`Insertar ${c.char}`}
+                        type="button"
+                      >
+                        {c.char}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 

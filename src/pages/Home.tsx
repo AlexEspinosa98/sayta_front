@@ -151,6 +151,14 @@ export default function Home() {
               <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 6 }}>
                 <SpecialKeyboardToggle open={kb.open} onToggle={() => kb.open ? kb.setOpen(false) : kb.openKeyboard()} />
               </div>
+              <SpecialKeyboardPanel
+                open={kb.open}
+                onClose={() => kb.setOpen(false)}
+                onInsert={kb.insertAtCursor}
+                onDelete={kb.deleteChar}
+                onSpace={() => kb.insertAtCursor(' ')}
+                onEnter={() => kb.insertAtCursor('\n')}
+              />
             </div>
           ) : (
             <div className="tc-audio" role="group" aria-label="Entrada de audio">
@@ -252,14 +260,6 @@ export default function Home() {
 
         </div>
       </div>
-      <SpecialKeyboardPanel
-        open={kb.open}
-        onClose={() => kb.setOpen(false)}
-        onInsert={kb.insertAtCursor}
-        onDelete={kb.deleteChar}
-        onSpace={() => kb.insertAtCursor(' ')}
-        onEnter={() => kb.insertAtCursor('\n')}
-      />
     </section>
   )
 }
