@@ -1,66 +1,143 @@
-import { useState, useRef, useId } from 'react'
+import { useState, useRef, useId, useEffect } from 'react'
 import {
   Mic, MicOff, Upload, Languages,
-  ArrowRightLeft, Loader2, Volume2, Copy, Check,
+  Loader2, Volume2, Copy, Check, AlertCircle,
+  ArrowRight, ArrowLeft, ArrowRightLeft,
 } from 'lucide-react'
 import {
   useSpecialKeyboard, SpecialKeyboardPanel, SpecialKeyboardToggle,
 } from '../components/SpecialKeyboard'
 
-type Language = 'arhuaco' | 'kogui'
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+const API = 'http://localhost:8000/api'
+
+interface Lengua {
+  id: number; codigo: string; nombre: string; activa: boolean
+  embedding_activo: object | null
+}
+
+interface ResultadoItem { termino: string; definicion: string; score: number }
+
+interface TraduccionResponse {
+  texto_entrada: string
+  lengua: { id: number; codigo: string; nombre: string }
+  embedding: { version_id: string; version: string; modelo: string; num_terminos: number }
+  direccion: string
+  resultados: ResultadoItem[]
+}
+
+type Direccion = 'es_a_lengua' | 'lengua_a_es'
 type InputMode = 'text' | 'audio'
 
-const LANG_LABELS: Record<Language, string> = { arhuaco: 'Arhuaco', kogui: 'Kogui' }
+// ── Score helpers ─────────────────────────────────────────────────────────────
+
+function ScoreBadge({ score }: { score: number }) {
+  const pct = Math.round(score * 100)
+  const cls = score >= 0.85 ? 'tc-score--high' : score >= 0.7 ? 'tc-score--mid' : 'tc-score--low'
+  return (
+    <div className={`tc-score-wrap ${cls}`}>
+      <span className="tc-score-pct">{pct}%</span>
+      <div className="tc-score-bar"><div className="tc-score-fill" style={{ width: `${pct}%` }} /></div>
+    </div>
+  )
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export default function Home() {
-  const [language, setLanguage]     = useState<Language>('arhuaco')
-  const [inputMode, setInputMode]   = useState<InputMode>('text')
-  const [inputText, setInputText]   = useState('')
-  const [audioFile, setAudioFile]   = useState<File | null>(null)
-  const [result, setResult]         = useState('')
-  const [isLoading, setIsLoading]   = useState(false)
-  const [isRecording, setIsRecording] = useState(false)
-  const [copied, setCopied]         = useState(false)
+  // Lenguas
+  const [lenguas, setLenguas]           = useState<Lengua[]>([])
+  const [loadingLenguas, setLoadingL]   = useState(true)
+
+  // Form
+  const [lenguaId, setLenguaId]         = useState<number | null>(null)
+  const [direccion, setDireccion]       = useState<Direccion>('es_a_lengua')
+  const [inputMode, setInputMode]       = useState<InputMode>('text')
+  const [inputText, setInputText]       = useState('')
+  const [audioFile, setAudioFile]       = useState<File | null>(null)
+  const [isRecording, setIsRecording]   = useState(false)
+
+  // Result
+  const [result, setResult]             = useState<TraduccionResponse | null>(null)
+  const [apiError, setApiError]         = useState('')
+  const [isLoading, setIsLoading]       = useState(false)
+  const [copied, setCopied]             = useState(false)
+
+  // Refs / ids
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef  = useRef<HTMLTextAreaElement>(null)
   const textareaId   = useId()
   const resultId     = useId()
-
   const kb = useSpecialKeyboard(textareaRef, inputText, setInputText)
 
-  const canTranslate =
-    inputMode === 'text' ? inputText.trim().length > 0 : audioFile !== null || isRecording
+  // Load languages on mount
+  useEffect(() => {
+    fetch(`${API}/terminos/lenguas/?page_size=50`)
+      .then(r => r.json())
+      .then(d => {
+        const list: Lengua[] = d.results ?? d
+        setLenguas(list)
+        if (list.length > 0) setLenguaId(list[0].id)
+      })
+      .catch(() => {})
+      .finally(() => setLoadingL(false))
+  }, [])
 
+  const selectedLengua = lenguas.find(l => l.id === lenguaId)
+
+  const canTranslate = lenguaId !== null && (
+    inputMode === 'text' ? inputText.trim().length > 0 : audioFile !== null || isRecording
+  )
+
+  // ── Translate ───────────────────────────────────────────────────────────────
   const handleTranslate = async () => {
-    if (!canTranslate) return
-    setIsLoading(true)
-    setResult('')
-    // TODO: conectar con el backend
-    await new Promise((r) => setTimeout(r, 1400))
-    setResult(
-      inputMode === 'text'
-        ? `Traducción de ${LANG_LABELS[language]} → Español:\n\n"${inputText}"`
-        : `Traducción de audio (${LANG_LABELS[language]}) → Español:\n\n[resultado del modelo de audio]`,
-    )
-    setIsLoading(false)
+    if (!canTranslate || !lenguaId) return
+    setIsLoading(true); setResult(null); setApiError('')
+    try {
+      const res = await fetch(`${API}/traduccion/traducir/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ texto: inputText.trim(), lengua_id: lenguaId, direccion }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setApiError(
+          data.error
+          || data.direccion?.[0]
+          || data.texto?.[0]
+          || data.lengua_id?.[0]
+          || `Error ${res.status}`
+        )
+      } else {
+        setResult(data)
+      }
+    } catch {
+      setApiError('No se pudo conectar con el servidor.')
+    } finally { setIsLoading(false) }
   }
 
   const handleCopy = async () => {
     if (!result) return
-    await navigator.clipboard.writeText(result)
+    const text = result.resultados
+      .map((r, i) => `${i + 1}. ${r.termino} — ${r.definicion} (${Math.round(r.score * 100)}%)`)
+      .join('\n')
+    await navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const handleRecordToggle = () => {
-    setIsRecording((r) => !r)
-    if (isRecording) setAudioFile(null)
-  }
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setAudioFile(e.target.files?.[0] ?? null)
-    setIsRecording(false)
-  }
+  // ── Input label / placeholder ───────────────────────────────────────────────
+  const langName = selectedLengua?.nombre ?? 'lengua indígena'
+  const inputLabel = direccion === 'es_a_lengua'
+    ? 'Texto en español'
+    : `Texto en ${langName}`
+  const inputPlaceholder = direccion === 'es_a_lengua'
+    ? 'Escribe en español…'
+    : `Escribe en ${langName}…`
+  const dirLabel = direccion === 'es_a_lengua'
+    ? `Español → ${langName}`
+    : `${langName} → Español`
 
   return (
     <section className="translator-page" aria-labelledby="translator-heading">
@@ -71,39 +148,70 @@ export default function Home() {
             <span aria-hidden="true"><Languages size={28} /></span>
             Traductor SAYTA
           </h1>
-          <p className="tp-subtitle">Arhuaco · Kogui → Español</p>
+          <p className="tp-subtitle">Búsqueda semántica por embeddings · lenguas indígenas colombianas</p>
         </header>
 
         <div className="tc" role="region" aria-label="Panel de traducción">
 
-          {/* ── Fila superior: lengua + modo ───────────────── */}
+          {/* ── Fila superior ──────────────────────────────── */}
           <div className="tc-top">
 
-            {/* Selector de lengua */}
-            <fieldset className="tc-fieldset">
-              <legend className="tc-legend">Lengua de origen</legend>
+            {/* Lengua */}
+            <fieldset className="tc-fieldset tc-fieldset--grow">
+              <legend className="tc-legend">Lengua indígena</legend>
               <div className="lang-selector" role="group">
-                {(['arhuaco', 'kogui'] as Language[]).map((l) => (
-                  <button
-                    key={l}
-                    type="button"
-                    className={`lang-pill ${language === l ? 'lang-pill-active' : ''}`}
-                    aria-pressed={language === l}
-                    onClick={() => setLanguage(l)}
-                  >
-                    {LANG_LABELS[l]}
-                  </button>
-                ))}
-                <span className="lang-arrow" aria-hidden="true">
-                  <ArrowRightLeft size={14} />
-                  Español
-                </span>
+                {loadingLenguas ? (
+                  <span className="lang-pill lang-pill-loading">
+                    <Loader2 size={13} className="spin" /> Cargando…
+                  </span>
+                ) : lenguas.length === 0 ? (
+                  <span className="lang-pill lang-pill-empty">Sin lenguas disponibles</span>
+                ) : (
+                  lenguas.map(l => (
+                    <button
+                      key={l.id}
+                      type="button"
+                      className={`lang-pill ${lenguaId === l.id ? 'lang-pill-active' : ''}`}
+                      aria-pressed={lenguaId === l.id}
+                      onClick={() => { setLenguaId(l.id); setResult(null); setApiError('') }}
+                      title={l.embedding_activo ? 'Embedding activo' : 'Sin embedding activo'}
+                    >
+                      {l.nombre}
+                      {!l.embedding_activo && <span className="lang-pill-warn" aria-label="Sin embedding">·</span>}
+                    </button>
+                  ))
+                )}
               </div>
             </fieldset>
 
-            {/* Modo de entrada */}
+            {/* Dirección */}
             <fieldset className="tc-fieldset">
-              <legend className="tc-legend">Modo de entrada</legend>
+              <legend className="tc-legend">Dirección</legend>
+              <div className="mode-pills" role="group">
+                <button
+                  type="button"
+                  className={`mode-pill ${direccion === 'es_a_lengua' ? 'mode-pill-active' : ''}`}
+                  aria-pressed={direccion === 'es_a_lengua'}
+                  onClick={() => { setDireccion('es_a_lengua'); setResult(null) }}
+                >
+                  <ArrowRight size={13} aria-hidden="true" />
+                  ES → Lengua
+                </button>
+                <button
+                  type="button"
+                  className={`mode-pill ${direccion === 'lengua_a_es' ? 'mode-pill-active' : ''}`}
+                  aria-pressed={direccion === 'lengua_a_es'}
+                  onClick={() => { setDireccion('lengua_a_es'); setResult(null) }}
+                >
+                  <ArrowLeft size={13} aria-hidden="true" />
+                  Lengua → ES
+                </button>
+              </div>
+            </fieldset>
+
+            {/* Modo */}
+            <fieldset className="tc-fieldset">
+              <legend className="tc-legend">Entrada</legend>
               <div className="mode-pills" role="group">
                 <button
                   type="button"
@@ -111,7 +219,7 @@ export default function Home() {
                   aria-pressed={inputMode === 'text'}
                   onClick={() => setInputMode('text')}
                 >
-                  <Languages size={14} aria-hidden="true" />
+                  <Languages size={13} aria-hidden="true" />
                   Texto
                 </button>
                 <button
@@ -120,7 +228,7 @@ export default function Home() {
                   aria-pressed={inputMode === 'audio'}
                   onClick={() => setInputMode('audio')}
                 >
-                  <Mic size={14} aria-hidden="true" />
+                  <Mic size={13} aria-hidden="true" />
                   Audio
                 </button>
               </div>
@@ -128,28 +236,36 @@ export default function Home() {
 
           </div>
 
+          {/* ── Dirección visual ───────────────────────────── */}
+          <div className="tc-dir-banner" aria-live="polite">
+            <ArrowRightLeft size={13} aria-hidden="true" />
+            <span>{dirLabel}</span>
+          </div>
+
           {/* ── Área de entrada ────────────────────────────── */}
           {inputMode === 'text' ? (
             <div className="tc-input-wrap">
-              <label htmlFor={textareaId} className="tc-label">
-                Texto en {LANG_LABELS[language]}
-              </label>
+              <label htmlFor={textareaId} className="tc-label">{inputLabel}</label>
               <textarea
                 ref={textareaRef}
                 id={textareaId}
                 className="tc-textarea"
-                placeholder={`Escribe en ${LANG_LABELS[language]}…`}
+                placeholder={inputPlaceholder}
                 value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                rows={5}
+                onChange={e => setInputText(e.target.value)}
+                rows={4}
                 aria-required="true"
                 aria-describedby={result ? resultId : undefined}
+                onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleTranslate() }}
               />
               <span className="tc-char-count" aria-live="polite" aria-atomic="true">
                 {inputText.length} {inputText.length === 1 ? 'carácter' : 'caracteres'}
               </span>
               <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 6 }}>
-                <SpecialKeyboardToggle open={kb.open} onToggle={() => kb.open ? kb.setOpen(false) : kb.openKeyboard()} />
+                <SpecialKeyboardToggle
+                  open={kb.open}
+                  onToggle={() => kb.open ? kb.setOpen(false) : kb.openKeyboard()}
+                />
               </div>
               <SpecialKeyboardPanel
                 open={kb.open}
@@ -167,34 +283,20 @@ export default function Home() {
                 className={`audio-record-btn ${isRecording ? 'audio-record-btn--active' : ''}`}
                 aria-pressed={isRecording}
                 aria-label={isRecording ? 'Detener grabación' : 'Iniciar grabación de voz'}
-                onClick={handleRecordToggle}
+                onClick={() => { setIsRecording(r => !r); if (isRecording) setAudioFile(null) }}
               >
                 {isRecording
                   ? <><MicOff size={20} aria-hidden="true" /> Detener <span className="rec-dot" aria-hidden="true" /></>
-                  : <><Mic size={20} aria-hidden="true" /> Grabar</>
-                }
+                  : <><Mic size={20} aria-hidden="true" /> Grabar</>}
               </button>
-
               <span className="audio-or" aria-hidden="true">o</span>
-
-              <button
-                type="button"
-                className="audio-upload-btn"
-                onClick={() => fileInputRef.current?.click()}
-                aria-label="Subir archivo de audio"
-              >
-                <Upload size={16} aria-hidden="true" />
-                Subir archivo
+              <button type="button" className="audio-upload-btn"
+                onClick={() => fileInputRef.current?.click()} aria-label="Subir archivo de audio">
+                <Upload size={16} aria-hidden="true" /> Subir archivo
               </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="audio/*"
-                aria-label="Seleccionar archivo de audio"
-                className="visually-hidden"
-                onChange={handleFileChange}
-              />
-
+              <input ref={fileInputRef} type="file" accept="audio/*"
+                aria-label="Seleccionar archivo de audio" className="visually-hidden"
+                onChange={e => { setAudioFile(e.target.files?.[0] ?? null); setIsRecording(false) }} />
               {audioFile && (
                 <span className="audio-file-tag" role="status">
                   <Volume2 size={12} aria-hidden="true" />
@@ -211,52 +313,68 @@ export default function Home() {
             onClick={handleTranslate}
             disabled={isLoading || !canTranslate}
             aria-busy={isLoading}
-            aria-disabled={!canTranslate}
+            title="También puedes pulsar Ctrl+Enter"
           >
             {isLoading
-              ? <><Loader2 size={18} className="spin" aria-hidden="true" /> Traduciendo…</>
-              : <><Languages size={18} aria-hidden="true" /> Traducir</>
-            }
+              ? <><Loader2 size={18} className="spin" aria-hidden="true" /> Buscando…</>
+              : <><Languages size={18} aria-hidden="true" /> Traducir</>}
           </button>
 
+          {/* ── Error ──────────────────────────────────────── */}
+          {apiError && (
+            <div className="tc-api-error" role="alert">
+              <AlertCircle size={16} aria-hidden="true" />
+              <span>{apiError}</span>
+            </div>
+          )}
+
+          {/* ── Loading ────────────────────────────────────── */}
+          {isLoading && (
+            <div className="tc-result tc-result--loading">
+              <Loader2 size={20} className="spin" aria-hidden="true" />
+              <span>Buscando términos similares…</span>
+            </div>
+          )}
+
           {/* ── Resultado ──────────────────────────────────── */}
-          <div
-            id={resultId}
-            role="status"
-            aria-live="polite"
-            aria-atomic="true"
-            aria-label="Resultado de la traducción"
-          >
-            {isLoading && (
-              <div className="tc-result tc-result--loading">
-                <Loader2 size={20} className="spin" aria-hidden="true" />
-                <span>Procesando traducción…</span>
-              </div>
-            )}
-            {result && !isLoading && (
-              <div className="tc-result">
-                <div className="tc-result-header">
-                  <span className="tc-result-label" id={`${resultId}-label`}>
-                    Traducción al Español
-                  </span>
-                  <button
-                    type="button"
-                    className="copy-btn"
-                    onClick={handleCopy}
-                    aria-label={copied ? 'Texto copiado al portapapeles' : 'Copiar traducción'}
-                  >
-                    {copied
-                      ? <><Check size={14} aria-hidden="true" /> Copiado</>
-                      : <><Copy size={14} aria-hidden="true" /> Copiar</>
-                    }
-                  </button>
+          {result && !isLoading && (
+            <div id={resultId} role="status" aria-live="polite" aria-label="Resultados">
+              {/* Header */}
+              <div className="tc-results-header">
+                <div className="tc-results-dir">
+                  <ArrowRightLeft size={13} aria-hidden="true" />
+                  <strong>{result.direccion}</strong>
+                  <span className="tc-results-sep">·</span>
+                  <span className="tc-results-query">"{result.texto_entrada}"</span>
                 </div>
-                <p className="tc-result-text" aria-labelledby={`${resultId}-label`}>
-                  {result}
-                </p>
+                <button type="button" className="copy-btn" onClick={handleCopy}
+                  aria-label={copied ? 'Copiado' : 'Copiar resultados'}>
+                  {copied
+                    ? <><Check size={13} aria-hidden="true" /> Copiado</>
+                    : <><Copy size={13} aria-hidden="true" /> Copiar</>}
+                </button>
               </div>
-            )}
-          </div>
+
+              {/* Result cards */}
+              <div className="tc-results-list" aria-label="Términos más cercanos">
+                {result.resultados.map((r, i) => (
+                  <div key={i} className="tc-result-card">
+                    <span className="tc-result-rank" aria-label={`Posición ${i + 1}`}>#{i + 1}</span>
+                    <div className="tc-result-body">
+                      <span className="tc-result-term">{r.termino}</span>
+                      <span className="tc-result-def">{r.definicion}</span>
+                    </div>
+                    <ScoreBadge score={r.score} />
+                  </div>
+                ))}
+              </div>
+
+              {/* Embedding info */}
+              <p className="tc-emb-info">
+                Embedding {result.embedding.version} · {result.embedding.num_terminos.toLocaleString()} términos · {result.embedding.modelo}
+              </p>
+            </div>
+          )}
 
         </div>
       </div>
