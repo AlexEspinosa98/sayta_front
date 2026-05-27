@@ -10,7 +10,7 @@ import {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-const API = 'http://localhost:8000/api'
+const API = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
 
 interface Lengua {
   id: number; codigo: string; nombre: string; activa: boolean
