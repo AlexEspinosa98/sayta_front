@@ -5,6 +5,7 @@ import Home from './pages/Home'
 import About from './pages/About'
 import Etiquetado from './pages/Etiquetado'
 import Glosario from './pages/Glosario'
+import Entrenamiento from './pages/Entrenamiento'
 
 export default function App() {
   return (
@@ -14,6 +15,7 @@ export default function App() {
         <Route path="/acerca" element={<About />} />
         <Route path="/etiquetado" element={<Etiquetado />} />
         <Route path="/glosario" element={<Glosario />} />
+        <Route path="/entrenamiento" element={<Entrenamiento />} />
       </Route>
     </Routes>
   )
