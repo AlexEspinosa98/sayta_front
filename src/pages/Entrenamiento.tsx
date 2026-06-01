@@ -9,32 +9,51 @@ import {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const API        = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
-const ADMIN_PW   = 'Un1m4gd4l3n4'
-const SESS_KEY   = 'entrenamiento_auth'
+const API      = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
+const ADMIN_PW = 'Un1m4gd4l3n4'
+const SESS_KEY = 'entrenamiento_auth'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+interface LenguaASR {
+  id: number; codigo: string; nombre: string; tiene_modelo_activo: boolean
+  modelo_activo: {
+    experimento_id: string; nombre: string; modelo_hf: string
+    metricas: Record<string, number>; completed_at: string
+  } | null
+  ultimo_experimento: { id: string; nombre: string; estado: string; created_at: string } | null
+  modelos_descargados: number
+  modelos_disponibles_para_entrenar: { id: number; nombre_hf: string; tipo: string }[]
+}
 
 interface ComunidadStat {
   comunidad: string; total_jornadas: number; total_audios: number
   etiquetados: number; sin_etiquetar: number
   porcentaje_completado: number; apto_para_entrenamiento: boolean
 }
+
 interface JornadaStat { jornada: string; total_audios: number; etiquetados: number; porcentaje: number }
+
 interface ComunidadDetalle {
   comunidad: string; total_audios: number; etiquetados: number
   apto_para_entrenamiento: boolean; jornadas: JornadaStat[]
 }
+
+interface Sesion {
+  comunidad: string; jornada: string; total_audios: number
+  etiquetados: number; sin_etiquetar: number; porcentaje: number; apta: boolean
+}
+
 interface ModeloHF {
   nombre_hf: string; tipo: string; descripcion: string
   tamaño_aprox: string; parametros: string
   recomendado: boolean; gpu_requerida: boolean; descargado: boolean; id_bd: number | null
 }
+
 interface ModeloLocal {
   id: number; nombre_hf: string; tipo: string; tipo_display: string
   descripcion: string; ruta_local: string; descargado: boolean; created_at: string
 }
-interface Lengua { id: number; codigo: string; nombre: string; activa: boolean }
 
 interface Experimento {
   id: string; nombre: string; lengua_codigo: string; lengua_nombre: string
@@ -43,6 +62,7 @@ interface Experimento {
   num_muestras_train: number; num_muestras_eval: number
   metricas: Record<string, number>; created_at: string; completed_at: string | null
 }
+
 interface ExperimentoDetalle extends Experimento {
   modelo_base_info: { id: number; nombre_hf: string; tipo: string; tipo_display: string; descargado: boolean }
   config_entrenamiento: Record<string, unknown>
@@ -52,16 +72,31 @@ interface ExperimentoDetalle extends Experimento {
   task_info: { experimento_id: string; started_at: string; estado: string } | null
 }
 
+interface ExperimentoEstado {
+  id: string; nombre: string
+  lengua: string; modelo: string  // campo corto del endpoint /estado/
+  estado: string; is_active: boolean
+  num_muestras_train: number; num_muestras_eval: number
+  metricas: Record<string, number>
+  mlflow_run_id: string; mlflow_experiment_name: string; mlflow_experiment_id?: string
+  error_mensaje: string; created_at: string; completed_at: string | null
+  task_info: { experimento_id: string; started_at: string; estado: string } | null
+}
+
+interface SesionKey { comunidad: string; jornada: string }
+
 type Expand = ComunidadDetalle | 'loading' | null
 type Tab = 'datos' | 'modelos' | 'entrenar' | 'experimentos' | 'transcribir'
+type DataMode = 'todos' | 'comunidades' | 'sesiones'
 
 // ── API helper ────────────────────────────────────────────────────────────────
 
 async function apiFetch(path: string, opts?: RequestInit) {
-  const isFormData = opts?.body instanceof FormData
+  const isForm = opts?.body instanceof FormData
   const res = await fetch(`${API}${path}`, {
     ...opts,
-    headers: isFormData ? { Accept: 'application/json', ...(opts?.headers ?? {}) }
+    headers: isForm
+      ? { Accept: 'application/json', ...(opts?.headers ?? {}) }
       : { 'Content-Type': 'application/json', Accept: 'application/json', ...(opts?.headers ?? {}) },
   })
   const data = await res.json()
@@ -125,25 +160,36 @@ function PasswordGate({ onAuth }: { onAuth: () => void }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// DatosTab — HU-15 + HU-16
+// DatosTab — HU-15 + HU-15b + HU-15c + HU-16
 // ══════════════════════════════════════════════════════════════════════════════
 
-function DatosTab({ onSelect }: { onSelect: (c: string[]) => void }) {
-  const [dataset, setDataset] = useState<{
-    base_path: string; existe: boolean; total_comunidades: number; comunidades: ComunidadStat[]
-  } | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [expanded, setExpanded] = useState<Record<string, Expand>>({})
-  const [selected, setSelected] = useState<string[]>([])
+function sesionId(s: SesionKey) { return `${s.comunidad}::${s.jornada}` }
 
-  const load = useCallback(async () => {
+function DatosTab({ onSelectSesiones }: { onSelectSesiones: (s: SesionKey[]) => void }) {
+  const [lenguasASR, setLenguasASR] = useState<LenguaASR[]>([])
+  const [dataset, setDataset]       = useState<{ base_path: string; existe: boolean; comunidades: ComunidadStat[] } | null>(null)
+  const [sesiones, setSesiones]     = useState<Sesion[]>([])
+  const [loading, setLoading]       = useState(true)
+  const [dataView, setDataView]     = useState<'comunidad' | 'jornada'>('comunidad')
+  const [expanded, setExpanded]     = useState<Record<string, Expand>>({})
+  const [selSesiones, setSelSesiones] = useState<SesionKey[]>([])
+
+  const loadAll = useCallback(async () => {
     setLoading(true)
-    try { setDataset(await apiFetch('/entrenamiento/dataset/')) }
-    catch { setDataset(null) }
+    try {
+      const [lang, dat, ses] = await Promise.all([
+        apiFetch('/entrenamiento/lenguas/'),
+        apiFetch('/entrenamiento/dataset/'),
+        apiFetch('/entrenamiento/dataset/sesiones/'),
+      ])
+      setLenguasASR(lang.lenguas ?? [])
+      setDataset(dat)
+      setSesiones(ses.sesiones ?? [])
+    } catch { /* silencio */ }
     finally { setLoading(false) }
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { loadAll() }, [loadAll])
 
   const toggleExpand = async (com: string) => {
     if (expanded[com] !== undefined) {
@@ -157,106 +203,223 @@ function DatosTab({ onSelect }: { onSelect: (c: string[]) => void }) {
     } catch { setExpanded(p => ({ ...p, [com]: null })) }
   }
 
-  const toggleSelect = (com: string, apto: boolean) => {
-    if (!apto) return
-    const next = selected.includes(com) ? selected.filter(c => c !== com) : [...selected, com]
-    setSelected(next); onSelect(next)
+  // Session selection helpers
+  const isSesionSel = (com: string, jor: string) =>
+    selSesiones.some(s => s.comunidad === com && s.jornada === jor)
+
+  const toggleSesion = (com: string, jor: string) => {
+    const next = isSesionSel(com, jor)
+      ? selSesiones.filter(s => !(s.comunidad === com && s.jornada === jor))
+      : [...selSesiones, { comunidad: com, jornada: jor }]
+    setSelSesiones(next); onSelectSesiones(next)
   }
 
-  if (loading) return <div className="ent-loading"><Loader2 size={18} className="spin" /> Cargando dataset…</div>
-  if (!dataset) return <div className="ent-empty"><AlertTriangle size={18} /> No se pudo cargar el dataset.</div>
-  if (!dataset.existe) return <div className="ent-empty"><AlertTriangle size={18} /> El directorio de grabaciones no existe en el servidor.</div>
+  const comSesiones = (com: string) => sesiones.filter(s => s.comunidad === com && s.apta)
+  const comAllSel   = (com: string) => comSesiones(com).every(s => isSesionSel(com, s.jornada))
+
+  const toggleAllCom = (com: string) => {
+    const all = comSesiones(com)
+    let next: SesionKey[]
+    if (comAllSel(com)) {
+      next = selSesiones.filter(s => s.comunidad !== com)
+    } else {
+      const existing = selSesiones.filter(s => s.comunidad !== com)
+      next = [...existing, ...all.map(s => ({ comunidad: com, jornada: s.jornada }))]
+    }
+    setSelSesiones(next); onSelectSesiones(next)
+  }
+
+  // Group sesiones by community
+  const groups = sesiones.reduce<Record<string, Sesion[]>>((acc, s) => {
+    if (!acc[s.comunidad]) acc[s.comunidad] = []
+    acc[s.comunidad].push(s)
+    return acc
+  }, {})
+
+  const totalSelEtiq = selSesiones.reduce((sum, sk) => {
+    const s = sesiones.find(x => x.comunidad === sk.comunidad && x.jornada === sk.jornada)
+    return sum + (s?.etiquetados ?? 0)
+  }, 0)
+
+  if (loading) return <div className="ent-loading"><Loader2 size={18} className="spin" /> Cargando datos…</div>
 
   return (
     <div className="ent-section">
       <div className="ent-section-head">
-        <div>
-          <h2 className="ent-section-title">Datos disponibles</h2>
-          <p className="ent-section-sub">{dataset.total_comunidades} comunidad{dataset.total_comunidades !== 1 ? 'es' : ''} · <code>{dataset.base_path}</code></p>
-        </div>
-        <button className="ent-btn ent-btn--ghost" onClick={load} type="button"><RefreshCw size={13} /> Actualizar</button>
+        <h2 className="ent-section-title">Estado del sistema</h2>
+        <button className="ent-btn ent-btn--ghost" onClick={loadAll} type="button"><RefreshCw size={13} /> Actualizar</button>
       </div>
 
-      <div className="ent-comunidades">
-        {dataset.comunidades.map(c => (
-          <div key={c.comunidad} className={`ent-com-card${selected.includes(c.comunidad) ? ' ent-com-card--selected' : ''}`}>
-            <div className="ent-com-head">
-              <label className="ent-com-check-label">
-                <input
-                  type="checkbox" className="ent-checkbox"
-                  checked={selected.includes(c.comunidad)}
-                  disabled={!c.apto_para_entrenamiento}
-                  onChange={() => toggleSelect(c.comunidad, c.apto_para_entrenamiento)}
-                />
-                <span className="ent-com-name">{c.comunidad}</span>
-              </label>
-              <div className="ent-badges-row">
-                {c.apto_para_entrenamiento
-                  ? <span className="ent-badge ent-badge--ok"><CheckCircle2 size={10} /> Apto</span>
-                  : <span className="ent-badge ent-badge--warn"><AlertTriangle size={10} /> Insuficiente</span>}
-              </div>
-              <button className="ent-btn-icon" onClick={() => toggleExpand(c.comunidad)} type="button"
-                aria-label={expanded[c.comunidad] !== undefined ? 'Colapsar' : 'Expandir jornadas'}>
-                {expanded[c.comunidad] !== undefined ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-              </button>
+      {/* ── Lenguas ASR (HU-15) ── */}
+      <div className="ent-lenguas-grid">
+        {lenguasASR.length === 0 ? (
+          <p className="ent-hint">No hay lenguas registradas.</p>
+        ) : lenguasASR.map(l => (
+          <div key={l.id} className={`ent-lengua-card ${l.tiene_modelo_activo ? 'ent-lengua-card--active' : ''}`}>
+            <div className="ent-lengua-head">
+              <span className="ent-lengua-name">{l.nombre}</span>
+              <span className="ent-lengua-code">{l.codigo}</span>
+              {l.tiene_modelo_activo
+                ? <span className="ent-badge ent-badge--ok"><CheckCircle2 size={10} /> Modelo activo</span>
+                : <span className="ent-badge ent-badge--warn"><AlertTriangle size={10} /> Sin modelo ASR</span>}
             </div>
-
-            <div className="ent-com-stats">
-              <span><strong>{c.etiquetados}</strong> etiquetados</span>
-              <span className="ent-sep">·</span>
-              <span>{c.sin_etiquetar} sin etiquetar</span>
-              <span className="ent-sep">·</span>
-              <span>{c.total_audios} total · {c.total_jornadas} jornadas</span>
-            </div>
-
-            <div className="ent-prog-wrap">
-              <div className="ent-prog-bar">
-                <div
-                  className={`ent-prog-fill ${c.porcentaje_completado >= 70 ? 'ent-prog--high' : c.porcentaje_completado >= 40 ? 'ent-prog--mid' : 'ent-prog--low'}`}
-                  style={{ width: `${c.porcentaje_completado}%` }}
-                />
-              </div>
-              <span className="ent-prog-pct">{c.porcentaje_completado.toFixed(1)}%</span>
-            </div>
-
-            {expanded[c.comunidad] !== undefined && (
-              <div className="ent-jornadas">
-                {expanded[c.comunidad] === 'loading' ? (
-                  <div className="ent-loading-sm"><Loader2 size={13} className="spin" /> Cargando jornadas…</div>
-                ) : expanded[c.comunidad] === null ? (
-                  <p className="ent-err-sm">No se pudo cargar el detalle.</p>
-                ) : (
-                  <table className="ent-table ent-table--sm">
-                    <thead><tr><th>Jornada</th><th>Total</th><th>Etiquetados</th><th>%</th></tr></thead>
-                    <tbody>
-                      {(expanded[c.comunidad] as ComunidadDetalle).jornadas.map(j => (
-                        <tr key={j.jornada}>
-                          <td>
-                            {j.porcentaje === 100 && <CheckCircle2 size={11} className="ent-check-icon" />}
-                            <span className="ent-jornada-name">{j.jornada}</span>
-                          </td>
-                          <td>{j.total_audios}</td>
-                          <td>{j.etiquetados}</td>
-                          <td><span className={j.porcentaje === 100 ? 'ent-pct--full' : 'ent-pct'}>{j.porcentaje.toFixed(0)}%</span></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+            {l.tiene_modelo_activo && l.modelo_activo && (
+              <div className="ent-lengua-metrics">
+                <span className="ent-detail-key">Experimento</span>
+                <span className="ent-detail-val">{l.modelo_activo.nombre}</span>
+                {l.modelo_activo.metricas?.eval_wer != null && (
+                  <><span className="ent-detail-key">WER</span>
+                    <span className="ent-detail-val"><WerBadge wer={l.modelo_activo.metricas.eval_wer} /></span></>
+                )}
+                {l.modelo_activo.metricas?.eval_cer != null && (
+                  <><span className="ent-detail-key">CER</span>
+                    <span className="ent-detail-val"><WerBadge wer={l.modelo_activo.metricas.eval_cer} /></span></>
                 )}
               </div>
             )}
+            {!l.tiene_modelo_activo && l.ultimo_experimento?.estado === 'fallido' && (
+              <p className="ent-err-sm"><AlertTriangle size={11} /> Último intento falló el {new Date(l.ultimo_experimento.created_at).toLocaleDateString('es-CO')}</p>
+            )}
+            <p className="ent-hint">
+              {l.modelos_disponibles_para_entrenar.length > 0
+                ? `${l.modelos_disponibles_para_entrenar.length} modelo${l.modelos_disponibles_para_entrenar.length !== 1 ? 's' : ''} disponible${l.modelos_disponibles_para_entrenar.length !== 1 ? 's' : ''} para entrenar`
+                : 'Sin modelos descargados — descarga uno primero'}
+            </p>
           </div>
         ))}
       </div>
 
-      {selected.length > 0 && (
-        <div className="ent-selection-bar">
-          <span><strong>{selected.join(', ')}</strong> seleccionada{selected.length !== 1 ? 's' : ''}</span>
-          <span>
-            Total etiquetados: <strong>
-              {dataset.comunidades.filter(c => selected.includes(c.comunidad)).reduce((s, c) => s + c.etiquetados, 0)}
-            </strong>
-          </span>
+      {/* ── Dataset (HU-15b / HU-15c) ── */}
+      <div className="ent-section-head" style={{ marginTop: 8 }}>
+        <h3 className="ent-subsection-title">Datos de entrenamiento</h3>
+        <div className="ent-view-toggle">
+          <button
+            className={`ent-view-btn ${dataView === 'comunidad' ? 'ent-view-btn--active' : ''}`}
+            onClick={() => setDataView('comunidad')} type="button"
+          >Por comunidad</button>
+          <button
+            className={`ent-view-btn ${dataView === 'jornada' ? 'ent-view-btn--active' : ''}`}
+            onClick={() => setDataView('jornada')} type="button"
+          >Por jornada</button>
+        </div>
+      </div>
+
+      {!dataset?.existe && (
+        <div className="ent-empty"><AlertTriangle size={18} /> El directorio de grabaciones no existe en el servidor.</div>
+      )}
+
+      {dataset?.existe && dataView === 'comunidad' && (
+        <div className="ent-comunidades">
+          {dataset.comunidades.map(c => (
+            <div key={c.comunidad} className="ent-com-card">
+              <div className="ent-com-head">
+                <span className="ent-com-name">{c.comunidad}</span>
+                <div className="ent-badges-row">
+                  {c.apto_para_entrenamiento
+                    ? <span className="ent-badge ent-badge--ok"><CheckCircle2 size={10} /> Apto</span>
+                    : <span className="ent-badge ent-badge--warn"><AlertTriangle size={10} /> Insuficiente</span>}
+                </div>
+                <button className="ent-btn-icon" onClick={() => toggleExpand(c.comunidad)} type="button"
+                  aria-label={expanded[c.comunidad] !== undefined ? 'Colapsar' : 'Expandir'}>
+                  {expanded[c.comunidad] !== undefined ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                </button>
+              </div>
+              <div className="ent-com-stats">
+                <span><strong>{c.etiquetados}</strong> etiquetados</span>
+                <span className="ent-sep">·</span>
+                <span>{c.sin_etiquetar} sin etiquetar</span>
+                <span className="ent-sep">·</span>
+                <span>{c.total_audios} total · {c.total_jornadas} jornadas</span>
+              </div>
+              <div className="ent-prog-wrap">
+                <div className="ent-prog-bar">
+                  <div className={`ent-prog-fill ${c.porcentaje_completado >= 70 ? 'ent-prog--high' : c.porcentaje_completado >= 40 ? 'ent-prog--mid' : 'ent-prog--low'}`}
+                    style={{ width: `${c.porcentaje_completado}%` }} />
+                </div>
+                <span className="ent-prog-pct">{c.porcentaje_completado.toFixed(1)}%</span>
+              </div>
+              {expanded[c.comunidad] !== undefined && (
+                <div className="ent-jornadas">
+                  {expanded[c.comunidad] === 'loading' ? (
+                    <div className="ent-loading-sm"><Loader2 size={13} className="spin" /> Cargando jornadas…</div>
+                  ) : expanded[c.comunidad] === null ? (
+                    <p className="ent-err-sm">No se pudo cargar el detalle.</p>
+                  ) : (
+                    <table className="ent-table ent-table--sm">
+                      <thead><tr><th>Jornada</th><th>Total</th><th>Etiquetados</th><th>%</th></tr></thead>
+                      <tbody>
+                        {(expanded[c.comunidad] as ComunidadDetalle).jornadas.map(j => (
+                          <tr key={j.jornada}>
+                            <td>
+                              {j.porcentaje === 100 && <CheckCircle2 size={11} className="ent-check-icon" />}
+                              <span className="ent-jornada-name">{j.jornada}</span>
+                            </td>
+                            <td>{j.total_audios}</td><td>{j.etiquetados}</td>
+                            <td><span className={j.porcentaje === 100 ? 'ent-pct--full' : 'ent-pct'}>{j.porcentaje.toFixed(0)}%</span></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {dataset?.existe && dataView === 'jornada' && (
+        <div className="ent-sesiones-wrap">
+          <p className="ent-hint" style={{ marginBottom: 8 }}>
+            Marca las jornadas que quieres usar en el entrenamiento. Las selecciones se pre-cargarán en la pestaña <strong>Entrenar</strong>.
+          </p>
+          {Object.entries(groups).map(([com, sesList]) => {
+            const aptasList = sesList.filter(s => s.apta)
+            const allSel  = aptasList.length > 0 && aptasList.every(s => isSesionSel(com, s.jornada))
+            const noneSel = aptasList.every(s => !isSesionSel(com, s.jornada))
+            return (
+              <div key={com} className="ent-ses-group">
+                <div className="ent-ses-group-head">
+                  <label className="ent-check-label">
+                    <input
+                      type="checkbox"
+                      className="ent-checkbox"
+                      checked={allSel}
+                      ref={el => { if (el) el.indeterminate = !allSel && !noneSel }}
+                      onChange={() => toggleAllCom(com)}
+                    />
+                    <span className="ent-com-name">{com}</span>
+                  </label>
+                  <span className="ent-hint">{aptasList.length} jornada{aptasList.length !== 1 ? 's' : ''} aptas</span>
+                </div>
+                <div className="ent-ses-list">
+                  {sesList.map(s => (
+                    <label
+                      key={sesionId(s)}
+                      className={`ent-ses-item ${!s.apta ? 'ent-ses-item--disabled' : ''} ${isSesionSel(s.comunidad, s.jornada) ? 'ent-ses-item--selected' : ''}`}
+                    >
+                      <input
+                        type="checkbox" className="ent-checkbox"
+                        disabled={!s.apta}
+                        checked={isSesionSel(s.comunidad, s.jornada)}
+                        onChange={() => toggleSesion(s.comunidad, s.jornada)}
+                      />
+                      <span className="ent-ses-name">{s.jornada}</span>
+                      <span className="ent-ses-meta">{s.etiquetados} muestras · {s.porcentaje.toFixed(0)}%</span>
+                      {s.porcentaje === 100 && <CheckCircle2 size={11} className="ent-check-icon" />}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+
+          {selSesiones.length > 0 && (
+            <div className="ent-selection-bar">
+              <span><strong>{selSesiones.length}</strong> jornada{selSesiones.length !== 1 ? 's' : ''} seleccionada{selSesiones.length !== 1 ? 's' : ''}</span>
+              <span>Total etiquetados: <strong>{totalSelEtiq}</strong></span>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -268,11 +431,11 @@ function DatosTab({ onSelect }: { onSelect: (c: string[]) => void }) {
 // ══════════════════════════════════════════════════════════════════════════════
 
 function ModelosTab() {
-  const [catalogo, setCatalogo] = useState<ModeloHF[]>([])
+  const [catalogo, setCatalogo]     = useState<ModeloHF[]>([])
   const [descargados, setDescargados] = useState<ModeloLocal[]>([])
-  const [loading, setLoading] = useState(true)
-  const [dlState, setDlState] = useState<Record<string, 'loading' | 'err'>>({})
-  const [dlErr, setDlErr] = useState<Record<string, string>>({})
+  const [loading, setLoading]       = useState(true)
+  const [dlState, setDlState]       = useState<Record<string, boolean>>({})
+  const [dlErr, setDlErr]           = useState<Record<string, string>>({})
 
   const loadAll = useCallback(async () => {
     setLoading(true)
@@ -290,7 +453,7 @@ function ModelosTab() {
   useEffect(() => { loadAll() }, [loadAll])
 
   const descargar = async (m: ModeloHF) => {
-    setDlState(p => ({ ...p, [m.nombre_hf]: 'loading' }))
+    setDlState(p => ({ ...p, [m.nombre_hf]: true }))
     setDlErr(p => { const n = { ...p }; delete n[m.nombre_hf]; return n })
     try {
       await apiFetch('/entrenamiento/modelos/descargar/', {
@@ -299,10 +462,9 @@ function ModelosTab() {
       })
       await loadAll()
     } catch (e) {
-      setDlState(p => ({ ...p, [m.nombre_hf]: 'err' }))
       setDlErr(p => ({ ...p, [m.nombre_hf]: apiErr(e, 'Error al descargar.') }))
     } finally {
-      setDlState(p => { const n = { ...p }; delete n[m.nombre_hf]; return n })
+      setDlState(p => ({ ...p, [m.nombre_hf]: false }))
     }
   }
 
@@ -338,10 +500,10 @@ function ModelosTab() {
             {dlErr[m.nombre_hf] && <p className="ent-err-sm">{dlErr[m.nombre_hf]}</p>}
             <button
               className={`ent-btn ${m.descargado ? 'ent-btn--ghost' : 'ent-btn--primary'}`}
-              disabled={m.descargado || dlState[m.nombre_hf] === 'loading'}
+              disabled={m.descargado || dlState[m.nombre_hf]}
               onClick={() => descargar(m)} type="button"
             >
-              {dlState[m.nombre_hf] === 'loading'
+              {dlState[m.nombre_hf]
                 ? <><Loader2 size={13} className="spin" /> Descargando…</>
                 : m.descargado
                   ? <><HardDrive size={13} /> Disponible</>
@@ -353,7 +515,7 @@ function ModelosTab() {
 
       {descargados.length > 0 && (
         <>
-          <h3 className="ent-subsection-title">Modelos en servidor local ({descargados.length})</h3>
+          <h3 className="ent-subsection-title" style={{ marginTop: 8 }}>Modelos en servidor local ({descargados.length})</h3>
           <div className="ent-table-wrap">
             <table className="ent-table">
               <thead><tr><th>Modelo</th><th>Tipo</th><th>Ruta</th><th>Descargado</th></tr></thead>
@@ -376,23 +538,29 @@ function ModelosTab() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// EntrenarTab — HU-20
+// EntrenarTab — HU-20 (3 modos: todos / comunidades / sesiones)
 // ══════════════════════════════════════════════════════════════════════════════
 
 function EntrenarTab({
-  preselectedComunidades,
+  preselectedSesiones,
   onStarted,
-}: { preselectedComunidades: string[]; onStarted: (id: string) => void }) {
-  const [lenguas, setLenguas]     = useState<Lengua[]>([])
-  const [modelos, setModelos]     = useState<ModeloLocal[]>([])
-  const [dataset, setDataset]     = useState<ComunidadStat[]>([])
-  const [loading, setLoading]     = useState(true)
+}: { preselectedSesiones: SesionKey[]; onStarted: (id: string) => void }) {
+  const [lenguasASR, setLenguasASR] = useState<LenguaASR[]>([])
+  const [modelos, setModelos]       = useState<ModeloLocal[]>([])
+  const [sesiones, setSesiones]     = useState<Sesion[]>([])
+  const [loading, setLoading]       = useState(true)
 
-  const [nombre, setNombre]       = useState('')
-  const [lenguaId, setLenguaId]   = useState<number | ''>('')
-  const [modeloId, setModeloId]   = useState<number | ''>('')
-  const [comunidades, setComunidades] = useState<string[]>([])
-  const [showAdv, setShowAdv]     = useState(false)
+  const [nombre, setNombre]         = useState('')
+  const [lenguaId, setLenguaId]     = useState<number | ''>('')
+  const [modeloId, setModeloId]     = useState<number | ''>('')
+  const [dataMode, setDataMode]     = useState<DataMode>('sesiones')
+
+  // Comunidades mode
+  const [selComunidades, setSelComunidades] = useState<string[]>([])
+  // Sesiones mode
+  const [selSesiones, setSelSesiones]       = useState<SesionKey[]>(preselectedSesiones)
+
+  const [showAdv, setShowAdv]   = useState(false)
   const [cfg, setCfg] = useState({
     num_train_epochs: 20, per_device_train_batch_size: 4,
     gradient_accumulation_steps: 2, learning_rate: 1e-5,
@@ -403,30 +571,84 @@ function EntrenarTab({
 
   useEffect(() => {
     Promise.all([
-      fetch(`${API}/terminos/lenguas/?page_size=50`).then(r => r.json()),
+      apiFetch('/entrenamiento/lenguas/'),
       apiFetch('/entrenamiento/modelos/'),
-      apiFetch('/entrenamiento/dataset/'),
-    ]).then(([lang, mod, dat]) => {
-      setLenguas(lang.results ?? lang)
+      apiFetch('/entrenamiento/dataset/sesiones/'),
+    ]).then(([lang, mod, ses]) => {
+      setLenguasASR(lang.lenguas ?? [])
       setModelos(mod.modelos ?? [])
-      setDataset(dat.comunidades ?? [])
+      setSesiones(ses.sesiones ?? [])
     }).catch(() => {}).finally(() => setLoading(false))
   }, [])
 
   useEffect(() => {
-    if (preselectedComunidades.length > 0) setComunidades(preselectedComunidades)
-  }, [preselectedComunidades])
+    if (preselectedSesiones.length > 0) {
+      setSelSesiones(preselectedSesiones)
+      setDataMode('sesiones')
+    }
+  }, [preselectedSesiones])
 
-  const totalEtiq = dataset.filter(c => comunidades.includes(c.comunidad)).reduce((s, c) => s + c.etiquetados, 0)
-  const canSubmit = nombre.trim() && lenguaId && modeloId && comunidades.length > 0 && totalEtiq >= 5
+  // Group sesiones by community
+  const groups = sesiones.reduce<Record<string, Sesion[]>>((acc, s) => {
+    if (!acc[s.comunidad]) acc[s.comunidad] = []
+    acc[s.comunidad].push(s)
+    return acc
+  }, {})
+  const communities = Object.keys(groups)
+
+  const isSesionSel = (com: string, jor: string) =>
+    selSesiones.some(s => s.comunidad === com && s.jornada === jor)
+
+  const toggleSesion = (com: string, jor: string) => {
+    setSelSesiones(p =>
+      isSesionSel(com, jor)
+        ? p.filter(s => !(s.comunidad === com && s.jornada === jor))
+        : [...p, { comunidad: com, jornada: jor }]
+    )
+  }
+
+  const toggleAllCom = (com: string) => {
+    const aptasList = (groups[com] ?? []).filter(s => s.apta)
+    const allSel = aptasList.every(s => isSesionSel(com, s.jornada))
+    if (allSel) {
+      setSelSesiones(p => p.filter(s => s.comunidad !== com))
+    } else {
+      setSelSesiones(p => [
+        ...p.filter(s => s.comunidad !== com),
+        ...aptasList.map(s => ({ comunidad: com, jornada: s.jornada })),
+      ])
+    }
+  }
+
+  // Calculate total selected samples for each mode
+  const totalEtiq = (() => {
+    if (dataMode === 'todos') return sesiones.reduce((s, j) => s + j.etiquetados, 0)
+    if (dataMode === 'comunidades') return sesiones
+      .filter(s => selComunidades.includes(s.comunidad)).reduce((a, s) => a + s.etiquetados, 0)
+    return selSesiones.reduce((sum, sk) => {
+      const s = sesiones.find(x => x.comunidad === sk.comunidad && x.jornada === sk.jornada)
+      return sum + (s?.etiquetados ?? 0)
+    }, 0)
+  })()
+
+  const canSubmit = Boolean(
+    nombre.trim() && lenguaId && modeloId && totalEtiq >= 5 &&
+    (dataMode === 'todos' || (dataMode === 'comunidades' && selComunidades.length > 0) ||
+     (dataMode === 'sesiones' && selSesiones.length > 0))
+  )
 
   const submit = async () => {
     if (!canSubmit) return
     setSubmitting(true); setSubmitErr('')
     try {
+      const base = { nombre: nombre.trim(), lengua_id: lenguaId, modelo_audio_id: modeloId, config: cfg }
+      const dataPayload =
+        dataMode === 'todos' ? { todos: true }
+        : dataMode === 'comunidades' ? { comunidades: selComunidades }
+        : { sesiones: selSesiones.map(s => ({ comunidad: s.comunidad, jornada: s.jornada })) }
       const data = await apiFetch('/entrenamiento/entrenar/', {
         method: 'POST',
-        body: JSON.stringify({ nombre: nombre.trim(), lengua_id: lenguaId, modelo_audio_id: modeloId, comunidades, config: cfg }),
+        body: JSON.stringify({ ...base, ...dataPayload }),
       })
       onStarted(data.experimento_id)
     } catch (e) { setSubmitErr(apiErr(e, 'Error al lanzar el entrenamiento.')) }
@@ -445,56 +667,146 @@ function EntrenarTab({
       </div>
 
       <div className="ent-form">
+        {/* Nombre */}
         <div className="ent-field">
           <label className="ent-label">Nombre del experimento <span className="ent-req">*</span></label>
           <input className="gl-input" placeholder="ej. whisper-small-iku-v1"
             value={nombre} onChange={e => setNombre(e.target.value)} />
         </div>
 
+        {/* Lengua + Modelo */}
         <div className="ent-form-row">
           <div className="ent-field">
             <label className="ent-label">Lengua <span className="ent-req">*</span></label>
-            <select className="gl-input" value={lenguaId} onChange={e => setLenguaId(Number(e.target.value) as number | '')}>
-              <option value="">— Selecciona —</option>
-              {lenguas.map(l => <option key={l.id} value={l.id}>{l.nombre} ({l.codigo})</option>)}
+            <select className="gl-input" value={lenguaId}
+              onChange={e => setLenguaId(Number(e.target.value) as number | '')}>
+              <option value="">— Selecciona una lengua —</option>
+              {lenguasASR.map(l => (
+                <option key={l.id} value={l.id}>
+                  {l.nombre} ({l.codigo}){l.tiene_modelo_activo ? ' ✓' : ''}
+                </option>
+              ))}
             </select>
+            {lenguaId && (() => {
+              const l = lenguasASR.find(x => x.id === lenguaId)
+              if (!l) return null
+              if (l.modelos_disponibles_para_entrenar.length === 0)
+                return <p className="ent-hint ent-hint-err">Sin modelos descargados para esta lengua. Ve a <strong>Modelos</strong>.</p>
+              return null
+            })()}
           </div>
           <div className="ent-field">
             <label className="ent-label">Modelo base <span className="ent-req">*</span></label>
-            <select className="gl-input" value={modeloId} onChange={e => setModeloId(Number(e.target.value) as number | '')}>
-              <option value="">— Selecciona —</option>
+            <select className="gl-input" value={modeloId}
+              onChange={e => setModeloId(Number(e.target.value) as number | '')}>
+              <option value="">— Selecciona un modelo —</option>
               {modelos.map(m => <option key={m.id} value={m.id}>{m.nombre_hf}</option>)}
             </select>
-            {modelos.length === 0 && <p className="ent-hint">Sin modelos descargados. Ve a <strong>Modelos</strong> para descargar uno.</p>}
+            {modelos.length === 0 && (
+              <p className="ent-hint ent-hint-err">Sin modelos descargados. Ve a <strong>Modelos</strong>.</p>
+            )}
           </div>
         </div>
 
+        {/* Modo de selección de datos */}
         <div className="ent-field">
-          <label className="ent-label">Comunidades <span className="ent-req">*</span></label>
-          <div className="ent-checkboxes">
-            {dataset.map(c => (
-              <label key={c.comunidad} className={`ent-check-label${!c.apto_para_entrenamiento ? ' ent-check-label--disabled' : ''}`}>
-                <input type="checkbox" className="ent-checkbox"
-                  checked={comunidades.includes(c.comunidad)}
-                  disabled={!c.apto_para_entrenamiento}
-                  onChange={() => setComunidades(p =>
-                    p.includes(c.comunidad) ? p.filter(x => x !== c.comunidad) : [...p, c.comunidad]
-                  )}
-                />
-                <span>{c.comunidad}</span>
-                <span className="ent-check-meta">{c.etiquetados} muestras</span>
-                {!c.apto_para_entrenamiento && <span className="ent-badge ent-badge--warn" style={{ fontSize: '.66rem' }}>Insuficiente</span>}
+          <label className="ent-label">Datos de entrenamiento <span className="ent-req">*</span></label>
+          <div className="ent-mode-radios">
+            {([
+              ['todos',      'Todos los audios del sistema',      'Usa todos los audios etiquetados disponibles'],
+              ['comunidades','Por comunidades completas',          'Selecciona comunidades enteras'],
+              ['sesiones',   'Selección de jornadas (granular)',   'Elige jornadas individuales con checkboxes'],
+            ] as [DataMode, string, string][]).map(([mode, label, hint]) => (
+              <label key={mode} className={`ent-radio-label ${dataMode === mode ? 'ent-radio-label--active' : ''}`}>
+                <input type="radio" name="dataMode" value={mode} className="ent-radio"
+                  checked={dataMode === mode} onChange={() => setDataMode(mode)} />
+                <div>
+                  <span className="ent-radio-title">{label}</span>
+                  <span className="ent-radio-hint">{hint}</span>
+                </div>
               </label>
             ))}
           </div>
-          {comunidades.length > 0 && (
-            <p className="ent-hint">
-              Total estimado: <strong>{totalEtiq} muestras etiquetadas</strong>
-              {totalEtiq < 5 && <span className="ent-hint-err"> · mínimo 5</span>}
-            </p>
+
+          {/* Modo: Todos */}
+          {dataMode === 'todos' && (
+            <div className="ent-data-preview">
+              <p className="ent-hint">Total disponible: <strong>{sesiones.reduce((s, j) => s + j.etiquetados, 0)} muestras etiquetadas</strong> en {sesiones.filter(s => s.apta).length} jornadas.</p>
+            </div>
           )}
+
+          {/* Modo: Comunidades */}
+          {dataMode === 'comunidades' && (
+            <div className="ent-checkboxes ent-data-preview">
+              {communities.map(com => {
+                const etiq = (groups[com] ?? []).reduce((s, j) => s + j.etiquetados, 0)
+                return (
+                  <label key={com} className="ent-check-label">
+                    <input type="checkbox" className="ent-checkbox"
+                      checked={selComunidades.includes(com)}
+                      onChange={() => setSelComunidades(p =>
+                        p.includes(com) ? p.filter(c => c !== com) : [...p, com]
+                      )}
+                    />
+                    <span>{com}</span>
+                    <span className="ent-check-meta">{etiq} muestras</span>
+                  </label>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Modo: Sesiones granulares */}
+          {dataMode === 'sesiones' && (
+            <div className="ent-sesiones-wrap ent-data-preview">
+              {Object.entries(groups).map(([com, sesList]) => {
+                const aptasList = sesList.filter(s => s.apta)
+                const allSel  = aptasList.length > 0 && aptasList.every(s => isSesionSel(com, s.jornada))
+                const noneSel = aptasList.every(s => !isSesionSel(com, s.jornada))
+                return (
+                  <div key={com} className="ent-ses-group">
+                    <div className="ent-ses-group-head">
+                      <label className="ent-check-label">
+                        <input
+                          type="checkbox" className="ent-checkbox"
+                          checked={allSel}
+                          ref={el => { if (el) el.indeterminate = !allSel && !noneSel }}
+                          onChange={() => toggleAllCom(com)}
+                        />
+                        <span className="ent-com-name">{com}</span>
+                      </label>
+                      <span className="ent-hint">{aptasList.length} jornada{aptasList.length !== 1 ? 's' : ''} aptas</span>
+                    </div>
+                    <div className="ent-ses-list">
+                      {sesList.map(s => (
+                        <label key={`${s.comunidad}:${s.jornada}`}
+                          className={`ent-ses-item ${!s.apta ? 'ent-ses-item--disabled' : ''} ${isSesionSel(s.comunidad, s.jornada) ? 'ent-ses-item--selected' : ''}`}>
+                          <input type="checkbox" className="ent-checkbox" disabled={!s.apta}
+                            checked={isSesionSel(s.comunidad, s.jornada)}
+                            onChange={() => toggleSesion(s.comunidad, s.jornada)} />
+                          <span className="ent-ses-name">{s.jornada}</span>
+                          <span className="ent-ses-meta">{s.etiquetados} muestras · {s.porcentaje.toFixed(0)}%</span>
+                          {s.porcentaje === 100 && <CheckCircle2 size={11} className="ent-check-icon" />}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Contador de muestras */}
+          <div className="ent-sample-counter">
+            <span className={`ent-sample-num ${totalEtiq >= 5 ? 'ent-sample-num--ok' : 'ent-sample-num--low'}`}>
+              {totalEtiq}
+            </span>
+            <span className="ent-sample-label">muestras seleccionadas{totalEtiq < 5 ? ' (mínimo 5)' : ''}</span>
+            {totalEtiq >= 5 && <CheckCircle2 size={14} style={{ color: '#16a34a' }} />}
+          </div>
         </div>
 
+        {/* Configuración avanzada */}
         <div className="ent-field">
           <button className="ent-btn ent-btn--ghost" onClick={() => setShowAdv(p => !p)} type="button">
             {showAdv ? <ChevronDown size={13} /> : <ChevronRight size={13} />} Configuración avanzada
@@ -520,7 +832,7 @@ function EntrenarTab({
                 <label className="ent-check-label">
                   <input type="checkbox" checked={cfg.use_peft}
                     onChange={e => setCfg(p => ({ ...p, use_peft: e.target.checked }))} />
-                  <span>Usar LoRA (PEFT) — ahorra memoria</span>
+                  <span>Usar LoRA (PEFT)</span>
                 </label>
               </div>
             </div>
@@ -543,17 +855,17 @@ function EntrenarTab({
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Monitor widget — HU-21
+// Monitor — HU-21
 // ══════════════════════════════════════════════════════════════════════════════
 
 function Monitor({ id, onActivated }: { id: string; onActivated: () => void }) {
-  const [estado, setEstado] = useState<ExperimentoDetalle | null>(null)
+  const [estado, setEstado]     = useState<ExperimentoEstado | null>(null)
   const [activErr, setActivErr] = useState('')
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const poll = useCallback(async () => {
     try {
-      const d: ExperimentoDetalle = await apiFetch(`/entrenamiento/experimentos/${id}/estado/`)
+      const d: ExperimentoEstado = await apiFetch(`/entrenamiento/experimentos/${id}/estado/`)
       setEstado(d)
       if (d.estado === 'completado' || d.estado === 'fallido' || d.is_active) {
         if (intervalRef.current) clearInterval(intervalRef.current)
@@ -573,7 +885,7 @@ function Monitor({ id, onActivated }: { id: string; onActivated: () => void }) {
     catch (e) { setActivErr(apiErr(e, 'Error al activar.')) }
   }
 
-  if (!estado) return <div className="ent-loading-sm"><Loader2 size={14} className="spin" /> Conectando con el experimento…</div>
+  if (!estado) return <div className="ent-loading-sm"><Loader2 size={14} className="spin" /> Conectando…</div>
 
   const isRunning = estado.estado === 'entrenando' || estado.estado === 'pendiente'
   const isDone    = estado.estado === 'completado'
@@ -585,7 +897,7 @@ function Monitor({ id, onActivated }: { id: string; onActivated: () => void }) {
         <div>
           <span className="ent-monitor-name">{estado.nombre}</span>
           <span className="ent-sep">·</span>
-          <span className="ent-monitor-sub">{estado.lengua_codigo} · {estado.modelo_nombre?.split('/')[1] ?? estado.modelo_nombre}</span>
+          <span className="ent-monitor-sub">{estado.lengua} · {estado.modelo?.split('/')[1] ?? estado.modelo}</span>
         </div>
         <EstadoBadge estado={estado.estado} isActive={estado.is_active} />
       </div>
@@ -608,9 +920,9 @@ function Monitor({ id, onActivated }: { id: string; onActivated: () => void }) {
                 <div key={k} className="ent-metric-cell">
                   <span className="ent-metric-key">{k.replace(/_/g, ' ')}</span>
                   <span className="ent-metric-val">
-                    {k === 'eval_wer' ? <WerBadge wer={v} />
-                      : k === 'eval_cer' ? <WerBadge wer={v} />
-                        : typeof v === 'number' && v < 100 ? v.toFixed(4) : v}
+                    {k === 'eval_wer' || k === 'eval_cer'
+                      ? <WerBadge wer={v} />
+                      : typeof v === 'number' && v < 100 ? v.toFixed(4) : v}
                   </span>
                 </div>
               ))}
@@ -712,12 +1024,7 @@ function ExperimentosTab({ monitorId, onClearMonitor }: { monitorId: string | nu
         <div className="ent-table-wrap">
           <table className="ent-table">
             <thead>
-              <tr>
-                <th />
-                <th>Nombre</th><th>Lengua</th><th>Modelo</th>
-                <th>WER</th><th>Muestras</th><th>Estado</th><th>Fecha</th>
-                <th />
-              </tr>
+              <tr><th /><th>Nombre</th><th>Lengua</th><th>Modelo</th><th>WER</th><th>Muestras</th><th>Estado</th><th>Fecha</th><th /></tr>
             </thead>
             <tbody>
               {exps.flatMap(exp => {
@@ -770,7 +1077,8 @@ function ExperimentosTab({ monitorId, onClearMonitor }: { monitorId: string | nu
                                 <div key={k} className="ent-metric-cell">
                                   <span className="ent-metric-key">{k.replace(/_/g, ' ')}</span>
                                   <span className="ent-metric-val">
-                                    {k === 'eval_wer' || k === 'eval_cer' ? <WerBadge wer={v} />
+                                    {k === 'eval_wer' || k === 'eval_cer'
+                                      ? <WerBadge wer={v} />
                                       : typeof v === 'number' && v < 100 ? v.toFixed(4) : v}
                                   </span>
                                 </div>
@@ -783,13 +1091,9 @@ function ExperimentosTab({ monitorId, onClearMonitor }: { monitorId: string | nu
                                 target="_blank" rel="noreferrer">{detail.mlflow_run_id}</a>
                             </p>
                           )}
-                          {detail.error_mensaje && (
-                            <p className="ent-err-sm" style={{ marginTop: 8 }}>{detail.error_mensaje}</p>
-                          )}
+                          {detail.error_mensaje && <p className="ent-err-sm" style={{ marginTop: 8 }}>{detail.error_mensaje}</p>}
                           {(exp.estado === 'entrenando' || exp.estado === 'pendiente') && (
-                            <div style={{ marginTop: 12 }}>
-                              <Monitor id={exp.id} onActivated={load} />
-                            </div>
+                            <div style={{ marginTop: 12 }}><Monitor id={exp.id} onActivated={load} /></div>
                           )}
                         </div>
                       )}
@@ -813,7 +1117,7 @@ function ExperimentosTab({ monitorId, onClearMonitor }: { monitorId: string | nu
 
 interface TraduccionResultado { termino: string; termino_es: string; definicion: string; probabilidad: number; mejor_coincidencia: boolean }
 interface TranscripcionResult {
-  transcripcion?: string; modelo?: string; lengua?: string
+  transcripcion?: string; modelo?: string
   error?: string
   traduccion?: {
     conclusion?: { termino: string; termino_es: string; definicion: string; probabilidad: number }
@@ -823,7 +1127,7 @@ interface TranscripcionResult {
 }
 
 function TranscribirTab() {
-  const [lenguas, setLenguas]       = useState<Lengua[]>([])
+  const [lenguasASR, setLenguasASR] = useState<LenguaASR[]>([])
   const [lenguaId, setLenguaId]     = useState<number | ''>('')
   const [audioFile, setAudioFile]   = useState<File | null>(null)
   const [isRecording, setIsRecording] = useState(false)
@@ -834,8 +1138,8 @@ function TranscribirTab() {
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    fetch(`${API}/terminos/lenguas/?page_size=50`).then(r => r.json())
-      .then(d => { const l: Lengua[] = d.results ?? d; setLenguas(l); if (l[0]) setLenguaId(l[0].id) })
+    apiFetch('/entrenamiento/lenguas/')
+      .then(d => { const l: LenguaASR[] = d.lenguas ?? []; setLenguasASR(l); if (l[0]) setLenguaId(l[0].id) })
       .catch(() => {})
   }, [])
 
@@ -878,17 +1182,19 @@ function TranscribirTab() {
           <label className="ent-label">Lengua <span className="ent-req">*</span></label>
           <select className="gl-input" value={lenguaId} onChange={e => setLenguaId(Number(e.target.value))}>
             <option value="">— Selecciona —</option>
-            {lenguas.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
+            {lenguasASR.map(l => (
+              <option key={l.id} value={l.id}>
+                {l.nombre}{l.tiene_modelo_activo ? ' ✓ Modelo activo' : ' (sin modelo)'}
+              </option>
+            ))}
           </select>
         </div>
 
         <div className="ent-field">
           <label className="ent-label">Audio <span className="ent-req">*</span></label>
           <div className="ent-audio-row">
-            <button
-              className={`audio-record-btn${isRecording ? ' audio-record-btn--active' : ''}`}
-              onClick={() => setIsRecording(r => !r)} type="button"
-            >
+            <button className={`audio-record-btn${isRecording ? ' audio-record-btn--active' : ''}`}
+              onClick={() => setIsRecording(r => !r)} type="button">
               {isRecording
                 ? <><MicOff size={15} /> Detener <span className="rec-dot" /></>
                 : <><Mic size={15} /> Grabar</>}
@@ -901,9 +1207,7 @@ function TranscribirTab() {
               className="visually-hidden"
               onChange={e => { setAudioFile(e.target.files?.[0] ?? null); setIsRecording(false) }} />
             {audioFile && (
-              <span className="audio-file-tag">
-                <Volume2 size={11} /><span className="truncate">{audioFile.name}</span>
-              </span>
+              <span className="audio-file-tag"><Volume2 size={11} /><span className="truncate">{audioFile.name}</span></span>
             )}
           </div>
           <p className="ent-hint">Formatos: .wav, .mp3, .ogg, .flac, .m4a, .mp4</p>
@@ -921,9 +1225,7 @@ function TranscribirTab() {
         <div className="ent-form-actions">
           <button className="ent-btn ent-btn--primary ent-btn--lg"
             disabled={!lenguaId || !audioFile || loading} onClick={submit} type="button">
-            {loading
-              ? <><Loader2 size={15} className="spin" /> Procesando…</>
-              : <><Mic size={15} /> Transcribir</>}
+            {loading ? <><Loader2 size={15} className="spin" /> Procesando…</> : <><Mic size={15} /> Transcribir</>}
           </button>
         </div>
 
@@ -966,27 +1268,17 @@ function TranscribirTab() {
                     </div>
                   </div>
                 </div>
-
                 {(result.traduccion.resultados?.length ?? 0) > 1 && (
                   <>
                     <p className="tc-opts-label">Elige una opción:</p>
                     <div className="tc-results-list" role="radiogroup">
                       {result.traduccion!.resultados!.map((r, i) => (
-                        <button
-                          key={i} type="button" role="radio" aria-checked={selectedIdx === i}
-                          className={[
-                            'tc-result-card',
-                            selectedIdx === i ? 'tc-result-card--selected' : '',
-                            r.mejor_coincidencia ? 'tc-result-card--best' : '',
-                          ].join(' ').trim()}
-                          onClick={() => setSelectedIdx(i)}
-                        >
+                        <button key={i} type="button" role="radio" aria-checked={selectedIdx === i}
+                          className={['tc-result-card', selectedIdx === i ? 'tc-result-card--selected' : '', r.mejor_coincidencia ? 'tc-result-card--best' : ''].join(' ').trim()}
+                          onClick={() => setSelectedIdx(i)}>
                           <span className="tc-result-rank">#{i + 1}</span>
                           <div className="tc-result-body">
-                            <span className="tc-result-term">
-                              {r.termino}
-                              {r.mejor_coincidencia && <span className="tc-result-best-tag">★</span>}
-                            </span>
+                            <span className="tc-result-term">{r.termino}{r.mejor_coincidencia && <span className="tc-result-best-tag">★</span>}</span>
                             <span className="tc-result-es">{r.termino_es}</span>
                             <span className="tc-result-def">{r.definicion}</span>
                           </div>
@@ -1013,18 +1305,18 @@ function TranscribirTab() {
 // ══════════════════════════════════════════════════════════════════════════════
 
 const TABS: { id: Tab; label: string; Icon: LucideIcon }[] = [
-  { id: 'datos',        label: 'Datos',         Icon: Database   },
-  { id: 'modelos',      label: 'Modelos',        Icon: Cpu        },
-  { id: 'entrenar',     label: 'Entrenar',       Icon: Play       },
-  { id: 'experimentos', label: 'Experimentos',   Icon: BarChart2  },
-  { id: 'transcribir',  label: 'Transcribir',    Icon: Mic        },
+  { id: 'datos',        label: 'Datos',       Icon: Database  },
+  { id: 'modelos',      label: 'Modelos',      Icon: Cpu       },
+  { id: 'entrenar',     label: 'Entrenar',     Icon: Play      },
+  { id: 'experimentos', label: 'Experimentos', Icon: BarChart2 },
+  { id: 'transcribir',  label: 'Transcribir',  Icon: Mic       },
 ]
 
 export default function Entrenamiento() {
-  const [auth, setAuth]           = useState(() => sessionStorage.getItem(SESS_KEY) === '1')
-  const [tab, setTab]             = useState<Tab>('datos')
-  const [selComunidades, setSelC] = useState<string[]>([])
-  const [monitorId, setMonitorId] = useState<string | null>(null)
+  const [auth, setAuth]             = useState(() => sessionStorage.getItem(SESS_KEY) === '1')
+  const [tab, setTab]               = useState<Tab>('datos')
+  const [selSesiones, setSelSesiones] = useState<SesionKey[]>([])
+  const [monitorId, setMonitorId]   = useState<string | null>(null)
 
   if (!auth) return (
     <div className="translator-page">
@@ -1046,24 +1338,22 @@ export default function Entrenamiento() {
 
       <div className="gl-tabs-bar">
         {TABS.map(({ id, label, Icon }) => (
-          <button
-            key={id} type="button"
+          <button key={id} type="button"
             className={`gl-tab${tab === id ? ' gl-tab-active' : ''}`}
-            onClick={() => setTab(id)}
-          >
+            onClick={() => setTab(id)}>
             <Icon size={13} />
             {label}
-            {id === 'experimentos' && monitorId && <span className="ent-tab-dot" aria-label="Entrenamiento activo" />}
+            {id === 'experimentos' && monitorId && <span className="ent-tab-dot" />}
           </button>
         ))}
       </div>
 
       <div className="ent-tab-content">
-        {tab === 'datos' && <DatosTab onSelect={setSelC} />}
+        {tab === 'datos' && <DatosTab onSelectSesiones={setSelSesiones} />}
         {tab === 'modelos' && <ModelosTab />}
         {tab === 'entrenar' && (
           <EntrenarTab
-            preselectedComunidades={selComunidades}
+            preselectedSesiones={selSesiones}
             onStarted={id => { setMonitorId(id); setTab('experimentos') }}
           />
         )}

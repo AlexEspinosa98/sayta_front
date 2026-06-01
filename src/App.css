@@ -2378,9 +2378,117 @@ a.contact-card .contact-card-icon { background: var(--blue); color: var(--white)
 }
 .shake { animation: shake .4s ease; }
 
+/* ── Language ASR status cards ── */
+.ent-lenguas-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px; margin-bottom: 8px;
+}
+.ent-lengua-card {
+  border: 1px solid var(--gray-200);
+  border-radius: var(--r-sm);
+  padding: 14px 16px;
+  background: var(--white);
+}
+.ent-lengua-card--active {
+  border-color: #22c55e;
+  background: #f0fdf4;
+}
+.ent-lengua-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 6px;
+}
+.ent-lengua-name { font-weight: 600; font-size: .95rem; color: var(--gray-900); }
+.ent-lengua-code {
+  font-size: .72rem; font-weight: 700; letter-spacing: .05em;
+  color: var(--gray-400); text-transform: uppercase;
+}
+.ent-lengua-metrics {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin-top: 6px;
+}
+
+/* ── View toggle (community / session) ── */
+.ent-view-toggle {
+  display: flex; gap: 0;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+.ent-view-btn {
+  padding: 5px 14px; font-size: .82rem; font-weight: 500;
+  background: var(--white); color: var(--gray-600);
+  border: none; cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.ent-view-btn + .ent-view-btn { border-left: 1px solid var(--gray-200); }
+.ent-view-btn--active { background: var(--blue); color: var(--white); }
+.ent-view-btn:hover:not(.ent-view-btn--active) { background: var(--gray-100); }
+
+/* ── Session selector ── */
+.ent-sesiones-wrap { display: flex; flex-direction: column; gap: 12px; }
+.ent-ses-group {
+  border: 1px solid var(--gray-200);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+.ent-ses-group-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 14px;
+  background: var(--gray-50);
+  border-bottom: 1px solid var(--gray-200);
+  font-weight: 600; font-size: .88rem; color: var(--gray-700);
+  cursor: pointer;
+}
+.ent-ses-list { display: flex; flex-direction: column; }
+.ent-ses-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--gray-100);
+  cursor: pointer;
+  transition: background .1s;
+}
+.ent-ses-item:hover { background: var(--blue-light); }
+.ent-ses-item--disabled { opacity: .45; cursor: not-allowed; }
+.ent-ses-item--disabled:hover { background: transparent; }
+.ent-ses-item--selected { background: #eff6ff; }
+.ent-ses-item--selected:hover { background: #dbeafe; }
+.ent-ses-name { flex: 1; font-size: .87rem; color: var(--gray-800); }
+.ent-ses-meta { font-size: .78rem; color: var(--gray-500); white-space: nowrap; }
+
+/* ── Data-mode radio selector ── */
+.ent-mode-radios { display: flex; flex-direction: column; gap: 8px; }
+.ent-radio { display: none; }
+.ent-radio-label {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 10px 14px;
+  border: 1px solid var(--gray-200); border-radius: var(--r-sm);
+  cursor: pointer; background: var(--white);
+  transition: border-color .15s, background .15s;
+}
+.ent-radio-label:hover { border-color: var(--blue); background: var(--blue-light); }
+.ent-radio-label--active { border-color: var(--blue); background: #eff6ff; }
+.ent-radio-title { font-weight: 600; font-size: .88rem; color: var(--gray-900); }
+.ent-radio-hint { font-size: .79rem; color: var(--gray-500); }
+
+/* ── Data preview & sample counter ── */
+.ent-data-preview {
+  padding: 10px 14px;
+  border: 1px solid var(--gray-200); border-radius: var(--r-sm);
+  background: var(--gray-50); font-size: .83rem; color: var(--gray-600);
+}
+.ent-sample-counter {
+  display: flex; align-items: baseline; gap: 6px; margin-top: 4px;
+}
+.ent-sample-num { font-size: 1.4rem; font-weight: 700; line-height: 1; }
+.ent-sample-num--ok  { color: #16a34a; }
+.ent-sample-num--low { color: #dc2626; }
+.ent-sample-label { font-size: .82rem; color: var(--gray-500); }
+
 @media (max-width: 640px) {
   .ent-form-row    { grid-template-columns: 1fr; }
   .ent-modelos-grid { grid-template-columns: 1fr; }
   .ent-config-grid { grid-template-columns: 1fr 1fr; }
   .ent-table th:nth-child(n+5), .ent-table td:nth-child(n+5) { display: none; }
+  .ent-lenguas-grid { grid-template-columns: 1fr; }
 }
