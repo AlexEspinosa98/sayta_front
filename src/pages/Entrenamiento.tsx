@@ -15,9 +15,30 @@ const SESS_KEY = 'entrenamiento_auth'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface Lengua {
-  id: number; codigo: string; nombre: string; activa: boolean
-  embedding_activo: object | null
+interface LenguaASR {
+  id: number; codigo: string; nombre: string; tiene_modelo_activo: boolean
+  modelo_activo: {
+    experimento_id: string; nombre: string; modelo_hf: string
+    metricas: Record<string, number>; completed_at: string
+  } | null
+  ultimo_experimento: { id: string; nombre: string; estado: string; created_at: string } | null
+  modelos_descargados: number
+  modelos_disponibles_para_entrenar: { id: number; nombre_hf: string; tipo: string }[]
+}
+
+type ComunidadesUsadas =
+  | { modo: 'todos' }
+  | { modo: 'comunidades'; comunidades: string[] }
+  | { modo: 'sesiones'; sesiones: { comunidad: string; jornada: string }[] }
+
+function formatComunidades(cu: ComunidadesUsadas | null | undefined): string {
+  if (!cu) return '—'
+  if (cu.modo === 'todos') return 'Todos los datos'
+  if (cu.modo === 'comunidades') return cu.comunidades.join(', ')
+  const counts = cu.sesiones.reduce<Record<string, number>>((acc, s) => {
+    acc[s.comunidad] = (acc[s.comunidad] ?? 0) + 1; return acc
+  }, {})
+  return Object.entries(counts).map(([c, n]) => `${n} jornada${n > 1 ? 's' : ''} de ${c}`).join(', ')
 }
 
 interface ComunidadStat {
@@ -51,7 +72,7 @@ interface ModeloLocal {
 
 interface Experimento {
   id: string; nombre: string; lengua_codigo: string; lengua_nombre: string
-  modelo_nombre: string; comunidades_usadas: string[]
+  modelo_nombre: string; comunidades_usadas: ComunidadesUsadas
   estado: string; estado_display: string; is_active: boolean
   num_muestras_train: number; num_muestras_eval: number
   metricas: Record<string, number>; created_at: string; completed_at: string | null
@@ -160,7 +181,7 @@ function PasswordGate({ onAuth }: { onAuth: () => void }) {
 function sesionId(s: SesionKey) { return `${s.comunidad}::${s.jornada}` }
 
 function DatosTab({ onSelectSesiones }: { onSelectSesiones: (s: SesionKey[]) => void }) {
-  const [lenguasASR, setLenguasASR] = useState<Lengua[]>([])
+  const [lenguasASR, setLenguasASR] = useState<LenguaASR[]>([])
   const [dataset, setDataset]       = useState<{ base_path: string; existe: boolean; comunidades: ComunidadStat[] } | null>(null)
   const [sesiones, setSesiones]     = useState<Sesion[]>([])
   const [loading, setLoading]       = useState(true)
@@ -172,11 +193,11 @@ function DatosTab({ onSelectSesiones }: { onSelectSesiones: (s: SesionKey[]) => 
     setLoading(true)
     try {
       const [lang, dat, ses] = await Promise.all([
-        apiFetch('/terminos/lenguas/?page_size=50'),
+        apiFetch('/entrenamiento/lenguas/'),
         apiFetch('/entrenamiento/dataset/'),
         apiFetch('/entrenamiento/dataset/sesiones/'),
       ])
-      setLenguasASR(lang.results ?? lang)
+      setLenguasASR(lang.lenguas ?? [])
       setDataset(dat)
       setSesiones(ses.sesiones ?? [])
     } catch { /* silencio */ }
@@ -244,21 +265,40 @@ function DatosTab({ onSelectSesiones }: { onSelectSesiones: (s: SesionKey[]) => 
         <button className="ent-btn ent-btn--ghost" onClick={loadAll} type="button"><RefreshCw size={13} /> Actualizar</button>
       </div>
 
-      {/* ── Lenguas registradas (HU-15) ── */}
+      {/* ── Lenguas ASR (HU-15) ── */}
       <div className="ent-lenguas-grid">
         {lenguasASR.length === 0 ? (
           <p className="ent-hint">No hay lenguas registradas.</p>
         ) : lenguasASR.map(l => (
-          <div key={l.id} className={`ent-lengua-card ${l.activa ? 'ent-lengua-card--active' : ''}`}>
+          <div key={l.id} className={`ent-lengua-card ${l.tiene_modelo_activo ? 'ent-lengua-card--active' : ''}`}>
             <div className="ent-lengua-head">
               <span className="ent-lengua-name">{l.nombre}</span>
               <span className="ent-lengua-code">{l.codigo}</span>
-              {l.activa
-                ? <span className="ent-badge ent-badge--ok"><CheckCircle2 size={10} /> Activa</span>
-                : <span className="ent-badge ent-badge--warn"><AlertTriangle size={10} /> Inactiva</span>}
+              {l.tiene_modelo_activo
+                ? <span className="ent-badge ent-badge--ok"><CheckCircle2 size={10} /> Modelo activo</span>
+                : <span className="ent-badge ent-badge--warn"><AlertTriangle size={10} /> Sin modelo ASR</span>}
             </div>
+            {l.tiene_modelo_activo && l.modelo_activo && (
+              <div className="ent-lengua-metrics">
+                <span className="ent-detail-key">Experimento</span>
+                <span className="ent-detail-val">{l.modelo_activo.nombre}</span>
+                {l.modelo_activo.metricas?.eval_wer != null && (
+                  <><span className="ent-detail-key">WER</span>
+                    <span className="ent-detail-val"><WerBadge wer={l.modelo_activo.metricas.eval_wer} /></span></>
+                )}
+                {l.modelo_activo.metricas?.eval_cer != null && (
+                  <><span className="ent-detail-key">CER</span>
+                    <span className="ent-detail-val"><WerBadge wer={l.modelo_activo.metricas.eval_cer} /></span></>
+                )}
+              </div>
+            )}
+            {!l.tiene_modelo_activo && l.ultimo_experimento?.estado === 'fallido' && (
+              <p className="ent-err-sm"><AlertTriangle size={11} /> Último intento falló el {new Date(l.ultimo_experimento.created_at).toLocaleDateString('es-CO')}</p>
+            )}
             <p className="ent-hint">
-              {l.embedding_activo ? 'Embedding disponible' : 'Sin embedding activo'}
+              {l.modelos_disponibles_para_entrenar.length > 0
+                ? `${l.modelos_disponibles_para_entrenar.length} modelo${l.modelos_disponibles_para_entrenar.length !== 1 ? 's' : ''} disponible${l.modelos_disponibles_para_entrenar.length !== 1 ? 's' : ''} para entrenar`
+                : 'Sin modelos descargados — descarga uno primero'}
             </p>
           </div>
         ))}
@@ -520,7 +560,7 @@ function EntrenarTab({
   preselectedSesiones,
   onStarted,
 }: { preselectedSesiones: SesionKey[]; onStarted: (id: string) => void }) {
-  const [lenguasASR, setLenguasASR] = useState<Lengua[]>([])
+  const [lenguasASR, setLenguasASR] = useState<LenguaASR[]>([])
   const [modelos, setModelos]       = useState<ModeloLocal[]>([])
   const [sesiones, setSesiones]     = useState<Sesion[]>([])
   const [loading, setLoading]       = useState(true)
@@ -546,11 +586,11 @@ function EntrenarTab({
 
   useEffect(() => {
     Promise.all([
-      apiFetch('/terminos/lenguas/?page_size=50'),
+      apiFetch('/entrenamiento/lenguas/'),
       apiFetch('/entrenamiento/modelos/'),
       apiFetch('/entrenamiento/dataset/sesiones/'),
     ]).then(([lang, mod, ses]) => {
-      setLenguasASR(lang.results ?? lang)
+      setLenguasASR(lang.lenguas ?? [])
       setModelos(mod.modelos ?? [])
       setSesiones(ses.sesiones ?? [])
     }).catch(() => {}).finally(() => setLoading(false))
@@ -658,10 +698,17 @@ function EntrenarTab({
               <option value="">— Selecciona una lengua —</option>
               {lenguasASR.map(l => (
                 <option key={l.id} value={l.id}>
-                  {l.nombre} ({l.codigo})
+                  {l.nombre} ({l.codigo}){l.tiene_modelo_activo ? ' ✓' : ''}
                 </option>
               ))}
             </select>
+            {lenguaId && (() => {
+              const l = lenguasASR.find(x => x.id === lenguaId)
+              if (!l) return null
+              if (l.modelos_disponibles_para_entrenar.length === 0)
+                return <p className="ent-hint ent-hint-err">Sin modelos descargados para esta lengua. Ve a <strong>Modelos</strong>.</p>
+              return null
+            })()}
           </div>
           <div className="ent-field">
             <label className="ent-label">Modelo base <span className="ent-req">*</span></label>
@@ -1030,7 +1077,7 @@ function ExperimentosTab({ monitorId, onClearMonitor }: { monitorId: string | nu
                       ) : (
                         <div className="ent-exp-detail">
                           <div className="ent-detail-grid">
-                            <div><p className="ent-detail-key">Comunidades</p><p className="ent-detail-val">{(exp.comunidades_usadas ?? []).join(', ') || '—'}</p></div>
+                            <div><p className="ent-detail-key">Datos usados</p><p className="ent-detail-val">{formatComunidades(exp.comunidades_usadas)}</p></div>
                             <div><p className="ent-detail-key">Train / Eval</p><p className="ent-detail-val">{detail.num_muestras_train} / {detail.num_muestras_eval}</p></div>
                             {detail.config_entrenamiento && Object.entries(detail.config_entrenamiento).map(([k, v]) => (
                               <div key={k}>
@@ -1095,7 +1142,7 @@ interface TranscripcionResult {
 }
 
 function TranscribirTab() {
-  const [lenguasASR, setLenguasASR] = useState<Lengua[]>([])
+  const [lenguasASR, setLenguasASR] = useState<LenguaASR[]>([])
   const [lenguaId, setLenguaId]     = useState<number | ''>('')
   const [audioFile, setAudioFile]   = useState<File | null>(null)
   const [isRecording, setIsRecording] = useState(false)
@@ -1106,8 +1153,8 @@ function TranscribirTab() {
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    apiFetch('/terminos/lenguas/?page_size=50')
-      .then(d => { const l: Lengua[] = d.results ?? d; setLenguasASR(l); if (l[0]) setLenguaId(l[0].id) })
+    apiFetch('/entrenamiento/lenguas/')
+      .then(d => { const l: LenguaASR[] = d.lenguas ?? []; setLenguasASR(l); if (l[0]) setLenguaId(l[0].id) })
       .catch(() => {})
   }, [])
 
@@ -1151,7 +1198,9 @@ function TranscribirTab() {
           <select className="gl-input" value={lenguaId} onChange={e => setLenguaId(Number(e.target.value))}>
             <option value="">— Selecciona —</option>
             {lenguasASR.map(l => (
-              <option key={l.id} value={l.id}>{l.nombre} ({l.codigo})</option>
+              <option key={l.id} value={l.id}>
+                {l.nombre} ({l.codigo}){l.tiene_modelo_activo ? ' ✓ Modelo activo' : ' (sin modelo)'}
+              </option>
             ))}
           </select>
         </div>
