@@ -3,7 +3,7 @@ import {
   Lock, Database, Cpu, Play, Mic, MicOff, Upload, Volume2,
   Loader2, CheckCircle2, AlertTriangle, XCircle,
   ChevronDown, ChevronRight, Download, HardDrive,
-  Star, RefreshCw, BarChart2, Languages, Activity, Zap,
+  Star, RefreshCw, BarChart2, Languages, Activity, Zap, FolderPlus,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -94,8 +94,15 @@ interface ExperimentoEstado {
 
 interface SesionKey { comunidad: string; jornada: string }
 
+interface SubirResult {
+  mensaje: string; comunidad: string; jornada: string
+  archivo_audio: string; duracion_segundos: number
+  transcripcion_guardada: string; ruta_relativa: string
+  jornada_stats: { total_audios: number; etiquetados: number; sin_etiquetar: number; porcentaje: number }
+}
+
 type Expand = ComunidadDetalle | 'loading' | null
-type Tab = 'datos' | 'modelos' | 'entrenar' | 'experimentos' | 'transcribir'
+type Tab = 'datos' | 'modelos' | 'entrenar' | 'experimentos' | 'transcribir' | 'subir'
 type DataMode = 'todos' | 'comunidades' | 'sesiones'
 
 // ── API helper ────────────────────────────────────────────────────────────────
@@ -1093,12 +1100,122 @@ function ExperimentosTab({ monitorId, onClearMonitor }: { monitorId: string | nu
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// useAudioRecorder — hook compartido de grabación real con MediaRecorder
+// ══════════════════════════════════════════════════════════════════════════════
+
+function useAudioRecorder() {
+  const [audioFile, setAudioFile]   = useState<File | null>(null)
+  const [audioUrl, setAudioUrl]     = useState<string | null>(null)
+  const [isRecording, setIsRecording] = useState(false)
+  const mediaRef  = useRef<MediaRecorder | null>(null)
+  const chunksRef = useRef<Blob[]>([])
+  const urlRef    = useRef<string | null>(null)
+
+  useEffect(() => () => { if (urlRef.current) URL.revokeObjectURL(urlRef.current) }, [])
+
+  const clearAudio = () => {
+    if (urlRef.current) { URL.revokeObjectURL(urlRef.current); urlRef.current = null }
+    setAudioFile(null); setAudioUrl(null)
+  }
+
+  const setFromBlob = (blob: Blob, name: string) => {
+    if (urlRef.current) URL.revokeObjectURL(urlRef.current)
+    const url = URL.createObjectURL(blob)
+    urlRef.current = url
+    setAudioUrl(url)
+    setAudioFile(new File([blob], name, { type: blob.type }))
+  }
+
+  const setFromFile = (f: File) => {
+    if (urlRef.current) URL.revokeObjectURL(urlRef.current)
+    const url = URL.createObjectURL(f)
+    urlRef.current = url
+    setAudioUrl(url)
+    setAudioFile(f)
+  }
+
+  const toggleRecording = async () => {
+    if (isRecording) {
+      mediaRef.current?.stop()
+      setIsRecording(false)
+      return
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      chunksRef.current = []
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/ogg'
+      const rec = new MediaRecorder(stream, { mimeType })
+      rec.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data) }
+      rec.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: mimeType })
+        const ext  = mimeType.includes('webm') ? 'webm' : 'ogg'
+        setFromBlob(blob, `grabacion_${Date.now()}.${ext}`)
+        stream.getTracks().forEach(t => t.stop())
+      }
+      mediaRef.current = rec
+      rec.start()
+      setIsRecording(true)
+    } catch { /* micrófono denegado o no disponible */ }
+  }
+
+  return { audioFile, audioUrl, isRecording, clearAudio, setFromFile, toggleRecording }
+}
+
+// ── AudioRow — controles grabación/subida reutilizables ───────────────────────
+
+function AudioRow({
+  audioFile, audioUrl, isRecording,
+  onToggleRecording, onFileChange, onClear,
+}: {
+  audioFile: File | null; audioUrl: string | null; isRecording: boolean
+  onToggleRecording: () => void; onFileChange: (f: File) => void; onClear: () => void
+}) {
+  const fileRef = useRef<HTMLInputElement>(null)
+  return (
+    <div className="ent-field">
+      <label className="ent-label">Audio <span className="ent-req">*</span></label>
+      <div className="ent-audio-row">
+        <button
+          className={`audio-record-btn${isRecording ? ' audio-record-btn--active' : ''}`}
+          onClick={onToggleRecording} type="button"
+        >
+          {isRecording
+            ? <><MicOff size={15} /> Detener <span className="rec-dot" /></>
+            : <><Mic size={15} /> Grabar</>}
+        </button>
+        <span className="audio-or">o</span>
+        <button className="audio-upload-btn" onClick={() => fileRef.current?.click()} type="button">
+          <Upload size={13} /> Subir archivo
+        </button>
+        <input ref={fileRef} type="file" accept=".wav,.mp3,.ogg,.flac,.m4a,.mp4"
+          className="visually-hidden"
+          onChange={e => { const f = e.target.files?.[0]; if (f) { onClear(); onFileChange(f) } }} />
+      </div>
+
+      {audioFile && audioUrl && (
+        <div className="ent-audio-preview">
+          <audio controls src={audioUrl} className="ent-audio-player" />
+          <div className="ent-audio-preview-info">
+            <Volume2 size={12} />
+            <span className="truncate">{audioFile.name}</span>
+            <button className="ent-btn-icon" onClick={onClear} type="button" aria-label="Quitar audio">
+              <XCircle size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+      <p className="ent-hint">Formatos: .wav, .mp3, .ogg, .flac, .m4a, .mp4</p>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // TranscribirTab — HU-25 + HU-26
 // ══════════════════════════════════════════════════════════════════════════════
 
 interface TraduccionResultado { termino: string; termino_es: string; definicion: string; probabilidad: number; mejor_coincidencia: boolean }
 interface TranscripcionResult {
-  transcripcion?: string; modelo?: string
+  transcripcion?: string; modelo?: string; lengua?: string
   error?: string
   traduccion?: {
     conclusion?: { termino: string; termino_es: string; definicion: string; probabilidad: number }
@@ -1110,13 +1227,12 @@ interface TranscripcionResult {
 function TranscribirTab() {
   const [lenguasASR, setLenguasASR] = useState<LenguaASR[]>([])
   const [lenguaId, setLenguaId]     = useState<number | ''>('')
-  const [audioFile, setAudioFile]   = useState<File | null>(null)
-  const [isRecording, setIsRecording] = useState(false)
   const [pipeline, setPipeline]     = useState(false)
   const [loading, setLoading]       = useState(false)
   const [result, setResult]         = useState<TranscripcionResult | null>(null)
   const [selectedIdx, setSelectedIdx] = useState(0)
-  const fileRef = useRef<HTMLInputElement>(null)
+
+  const rec = useAudioRecorder()
 
   useEffect(() => {
     apiFetch('/terminos/lenguas/?page_size=50')
@@ -1125,11 +1241,11 @@ function TranscribirTab() {
   }, [])
 
   const submit = async () => {
-    if (!lenguaId || !audioFile) return
+    if (!lenguaId || !rec.audioFile) return
     setLoading(true); setResult(null)
     const fd = new FormData()
     fd.append('lengua_id', String(lenguaId))
-    fd.append('audio', audioFile)
+    fd.append('audio', rec.audioFile)
     if (pipeline) fd.append('direccion', 'lengua_a_es')
     try {
       const ep = pipeline ? '/entrenamiento/transcribir-y-traducir/' : '/entrenamiento/transcribir/'
@@ -1146,7 +1262,7 @@ function TranscribirTab() {
     finally { setLoading(false) }
   }
 
-  const sel = result?.traduccion?.resultados?.[selectedIdx]
+  const sel     = result?.traduccion?.resultados?.[selectedIdx]
   const bestIdx = result?.traduccion?.resultados?.findIndex(r => r.mejor_coincidencia) ?? 0
 
   return (
@@ -1169,28 +1285,12 @@ function TranscribirTab() {
           </select>
         </div>
 
-        <div className="ent-field">
-          <label className="ent-label">Audio <span className="ent-req">*</span></label>
-          <div className="ent-audio-row">
-            <button className={`audio-record-btn${isRecording ? ' audio-record-btn--active' : ''}`}
-              onClick={() => setIsRecording(r => !r)} type="button">
-              {isRecording
-                ? <><MicOff size={15} /> Detener <span className="rec-dot" /></>
-                : <><Mic size={15} /> Grabar</>}
-            </button>
-            <span className="audio-or">o</span>
-            <button className="audio-upload-btn" onClick={() => fileRef.current?.click()} type="button">
-              <Upload size={13} /> Subir archivo
-            </button>
-            <input ref={fileRef} type="file" accept=".wav,.mp3,.ogg,.flac,.m4a,.mp4"
-              className="visually-hidden"
-              onChange={e => { setAudioFile(e.target.files?.[0] ?? null); setIsRecording(false) }} />
-            {audioFile && (
-              <span className="audio-file-tag"><Volume2 size={11} /><span className="truncate">{audioFile.name}</span></span>
-            )}
-          </div>
-          <p className="ent-hint">Formatos: .wav, .mp3, .ogg, .flac, .m4a, .mp4</p>
-        </div>
+        <AudioRow
+          audioFile={rec.audioFile} audioUrl={rec.audioUrl} isRecording={rec.isRecording}
+          onToggleRecording={rec.toggleRecording}
+          onFileChange={rec.setFromFile}
+          onClear={rec.clearAudio}
+        />
 
         <div className="ent-field">
           <label className="ent-check-label">
@@ -1203,8 +1303,10 @@ function TranscribirTab() {
 
         <div className="ent-form-actions">
           <button className="ent-btn ent-btn--primary ent-btn--lg"
-            disabled={!lenguaId || !audioFile || loading} onClick={submit} type="button">
-            {loading ? <><Loader2 size={15} className="spin" /> Procesando…</> : <><Mic size={15} /> Transcribir</>}
+            disabled={!lenguaId || !rec.audioFile || loading} onClick={submit} type="button">
+            {loading
+              ? <><Loader2 size={15} className="spin" /> Procesando…</>
+              : <><Mic size={15} /> {rec.audioFile ? 'Transcribir' : 'Graba o sube un audio'}</>}
           </button>
         </div>
 
@@ -1280,15 +1382,182 @@ function TranscribirTab() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// SubirTab — HU-21: Subir audio + transcripción al dataset
+// ══════════════════════════════════════════════════════════════════════════════
+
+function SubirTab() {
+  const [comunidades, setComunidades] = useState<string[]>([])
+  const [comunidad, setComunidad]     = useState('')
+  const [jornada, setJornada]         = useState('')
+  const [transcripcion, setTranscripcion] = useState('')
+  const [loading, setLoading]         = useState(false)
+  const [error, setError]             = useState('')
+  const [result, setResult]           = useState<SubirResult | null>(null)
+
+  const rec = useAudioRecorder()
+
+  useEffect(() => {
+    apiFetch('/entrenamiento/dataset/')
+      .then(d => setComunidades((d.comunidades ?? []).map((c: ComunidadStat) => c.comunidad)))
+      .catch(() => {})
+  }, [])
+
+  const canSubmit = Boolean(comunidad.trim() && jornada.trim() && rec.audioFile && transcripcion.trim())
+
+  const submit = async () => {
+    if (!canSubmit) return
+    setLoading(true); setError('')
+    const fd = new FormData()
+    fd.append('comunidad',    comunidad.trim())
+    fd.append('jornada',      jornada.trim())
+    fd.append('audio',        rec.audioFile!)
+    fd.append('transcripcion', transcripcion.trim())
+    try {
+      const res  = await fetch(`${API}/entrenamiento/dataset/subir/`, { method: 'POST', body: fd })
+      const data = await res.json()
+      if (res.ok) {
+        setResult(data)
+        rec.clearAudio()
+        setTranscripcion('')
+      } else {
+        setError(data.error ?? data.detail ?? `Error ${res.status}`)
+      }
+    } catch { setError('No se pudo conectar con el servidor.') }
+    finally { setLoading(false) }
+  }
+
+  const subirOtro = () => { setResult(null); setError('') }
+
+  const stats = result?.jornada_stats
+
+  return (
+    <div className="ent-section">
+      <div className="ent-section-head">
+        <div>
+          <h2 className="ent-section-title">Subir audio al dataset</h2>
+          <p className="ent-section-sub">Graba o sube un audio junto con su transcripción para aumentar los datos de entrenamiento</p>
+        </div>
+      </div>
+
+      {result ? (
+        <div className="ent-upload-result">
+          <div className="ent-upload-result-head">
+            <CheckCircle2 size={22} color="#16a34a" />
+            <div>
+              <p className="ent-upload-result-title">Audio guardado exitosamente</p>
+              <p className="ent-hint" style={{ marginTop: 2 }}>{result.ruta_relativa}</p>
+            </div>
+          </div>
+
+          <div className="ent-upload-result-grid">
+            <div>
+              <p className="ent-detail-key">Comunidad</p>
+              <p className="ent-detail-val">{result.comunidad}</p>
+            </div>
+            <div>
+              <p className="ent-detail-key">Jornada</p>
+              <p className="ent-detail-val">{result.jornada}</p>
+            </div>
+            <div>
+              <p className="ent-detail-key">Archivo</p>
+              <p className="ent-detail-val">{result.archivo_audio}</p>
+            </div>
+            <div>
+              <p className="ent-detail-key">Duración</p>
+              <p className="ent-detail-val">{result.duracion_segundos?.toFixed(1)} s</p>
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <p className="ent-detail-key">Transcripción guardada</p>
+              <p className="ent-detail-val" style={{ fontStyle: 'italic' }}>"{result.transcripcion_guardada}"</p>
+            </div>
+          </div>
+
+          {stats && (
+            <div style={{ marginTop: 12 }}>
+              <p className="ent-label-sm">Estado de la jornada <strong>{result.jornada}</strong></p>
+              <div className="ent-prog-wrap" style={{ marginTop: 6 }}>
+                <div className="ent-prog-bar">
+                  <div
+                    className={`ent-prog-fill ${stats.porcentaje >= 70 ? 'ent-prog--high' : stats.porcentaje >= 40 ? 'ent-prog--mid' : 'ent-prog--low'}`}
+                    style={{ width: `${stats.porcentaje}%` }}
+                  />
+                </div>
+                <span className="ent-prog-pct">{stats.porcentaje.toFixed(0)}%</span>
+              </div>
+              <p className="ent-hint">{stats.etiquetados} / {stats.total_audios} etiquetados · {stats.sin_etiquetar} sin etiquetar</p>
+            </div>
+          )}
+
+          <button className="ent-btn ent-btn--primary" onClick={subirOtro} type="button" style={{ marginTop: 16 }}>
+            <FolderPlus size={14} /> Subir otro audio a <strong style={{ marginLeft: 3 }}>{result.jornada}</strong>
+          </button>
+        </div>
+      ) : (
+        <div className="ent-form">
+          <div className="ent-form-row">
+            <div className="ent-field">
+              <label className="ent-label">Comunidad <span className="ent-req">*</span></label>
+              <input className="gl-input" list="sub-comunidades-list"
+                placeholder="arhuaco, kogui…"
+                value={comunidad} onChange={e => setComunidad(e.target.value)} />
+              <datalist id="sub-comunidades-list">
+                {comunidades.map(c => <option key={c} value={c} />)}
+              </datalist>
+              <p className="ent-hint">Elige una existente o escribe una nueva</p>
+            </div>
+            <div className="ent-field">
+              <label className="ent-label">Jornada <span className="ent-req">*</span></label>
+              <input className="gl-input"
+                placeholder="grabacion_junio_2026"
+                value={jornada} onChange={e => setJornada(e.target.value)} />
+              <p className="ent-hint">Se crea automáticamente si no existe</p>
+            </div>
+          </div>
+
+          <AudioRow
+            audioFile={rec.audioFile} audioUrl={rec.audioUrl} isRecording={rec.isRecording}
+            onToggleRecording={rec.toggleRecording}
+            onFileChange={rec.setFromFile}
+            onClear={rec.clearAudio}
+          />
+
+          <div className="ent-field">
+            <label className="ent-label">Transcripción <span className="ent-req">*</span></label>
+            <textarea className="gl-input" rows={3}
+              placeholder="Escribe aquí la transcripción en la lengua indígena…"
+              value={transcripcion}
+              onChange={e => setTranscripcion(e.target.value)}
+              style={{ resize: 'vertical', fontFamily: 'inherit' }}
+            />
+          </div>
+
+          {error && <div className="tc-api-error"><AlertTriangle size={14} /><span>{error}</span></div>}
+
+          <div className="ent-form-actions">
+            <button className="ent-btn ent-btn--primary ent-btn--lg"
+              disabled={!canSubmit || loading} onClick={submit} type="button">
+              {loading
+                ? <><Loader2 size={15} className="spin" /> Subiendo…</>
+                : <><Upload size={15} /> Guardar en dataset</>}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // Page
 // ══════════════════════════════════════════════════════════════════════════════
 
 const TABS: { id: Tab; label: string; Icon: LucideIcon }[] = [
-  { id: 'datos',        label: 'Datos',       Icon: Database  },
-  { id: 'modelos',      label: 'Modelos',      Icon: Cpu       },
-  { id: 'entrenar',     label: 'Entrenar',     Icon: Play      },
-  { id: 'experimentos', label: 'Experimentos', Icon: BarChart2 },
-  { id: 'transcribir',  label: 'Transcribir',  Icon: Mic       },
+  { id: 'datos',        label: 'Datos',        Icon: Database   },
+  { id: 'modelos',      label: 'Modelos',      Icon: Cpu        },
+  { id: 'entrenar',     label: 'Entrenar',     Icon: Play       },
+  { id: 'experimentos', label: 'Experimentos', Icon: BarChart2  },
+  { id: 'transcribir',  label: 'Transcribir',  Icon: Mic        },
+  { id: 'subir',        label: 'Subir datos',  Icon: FolderPlus },
 ]
 
 export default function Entrenamiento() {
@@ -1340,6 +1609,7 @@ export default function Entrenamiento() {
           <ExperimentosTab monitorId={monitorId} onClearMonitor={() => setMonitorId(null)} />
         )}
         {tab === 'transcribir' && <TranscribirTab />}
+        {tab === 'subir'       && <SubirTab />}
       </div>
     </div>
   )

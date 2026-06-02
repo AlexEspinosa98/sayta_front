@@ -2485,10 +2485,50 @@ a.contact-card .contact-card-icon { background: var(--blue); color: var(--white)
 .ent-sample-num--low { color: #dc2626; }
 .ent-sample-label { font-size: .82rem; color: var(--gray-500); }
 
+/* ── Audio preview (post-recording / post-upload) ── */
+.ent-audio-preview {
+  margin-top: 8px;
+  border: 1px solid var(--gray-200); border-radius: var(--r-sm);
+  overflow: hidden;
+}
+.ent-audio-player {
+  display: block; width: 100%; height: 40px;
+  background: var(--gray-50);
+}
+.ent-audio-preview-info {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 10px;
+  background: var(--gray-50);
+  border-top: 1px solid var(--gray-200);
+  font-size: .78rem; color: var(--gray-600);
+}
+.ent-audio-preview-info .truncate { flex: 1; }
+
+/* ── Upload result card (HU-21 success) ── */
+.ent-upload-result {
+  border: 1px solid #bbf7d0; border-radius: var(--r-md);
+  background: #f0fdf4; padding: 20px 24px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.ent-upload-result-head {
+  display: flex; align-items: flex-start; gap: 12px;
+  margin-bottom: 12px;
+}
+.ent-upload-result-title {
+  font-weight: 700; font-size: 1rem; color: #15803d; margin: 0;
+}
+.ent-upload-result-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+  padding: 12px; border-radius: var(--r-sm);
+  background: rgba(255,255,255,.7);
+}
+
 @media (max-width: 640px) {
   .ent-form-row    { grid-template-columns: 1fr; }
   .ent-modelos-grid { grid-template-columns: 1fr; }
   .ent-config-grid { grid-template-columns: 1fr 1fr; }
   .ent-table th:nth-child(n+5), .ent-table td:nth-child(n+5) { display: none; }
   .ent-lenguas-grid { grid-template-columns: 1fr; }
+  .ent-upload-result-grid { grid-template-columns: 1fr; }
 }
