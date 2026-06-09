@@ -11,7 +11,18 @@
       "Bash(npx tsc *)",
       "Bash(npm run *)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5174/glosario)",
-      "Bash(awk 'NR>=1374' /Users/alex_espinosa/Documents/New_order/Unimagdalena/traductor/front/src/App.css)"
+      "Bash(awk 'NR>=1374' /Users/alex_espinosa/Documents/New_order/Unimagdalena/traductor/front/src/App.css)",
+      "Bash(pnpm tsc *)",
+      "Bash(awk 'NR==1365' /Users/alex_espinosa/Documents/New_order/Unimagdalena/traductor/front/src/pages/Entrenamiento.tsx)",
+      "Bash(awk 'NR>=1363 && NR<=1375' /Users/alex_espinosa/Documents/New_order/Unimagdalena/traductor/front/src/pages/Entrenamiento.tsx)",
+      "Bash(pnpm build *)",
+      "Bash(pnpm dev *)",
+      "Bash(sed -n '1490,1515p' /Users/alex_espinosa/Documents/New_order/Unimagdalena/traductor/front/src/pages/Entrenamiento.tsx)",
+      "Bash(sed -n '1660,1690p' /Users/alex_espinosa/Documents/New_order/Unimagdalena/traductor/front/src/pages/Entrenamiento.tsx)",
+      "Bash(sed -n '668,685p' /Users/alex_espinosa/Documents/New_order/Unimagdalena/traductor/front/src/pages/Glosario.tsx)",
+      "Bash(sed -n '1495,1510p' /Users/alex_espinosa/Documents/New_order/Unimagdalena/traductor/front/src/pages/Entrenamiento.tsx)",
+      "Bash(sed -n '1664,1678p' /Users/alex_espinosa/Documents/New_order/Unimagdalena/traductor/front/src/pages/Entrenamiento.tsx)",
+      "Bash(sed -n '670,682p' /Users/alex_espinosa/Documents/New_order/Unimagdalena/traductor/front/src/pages/Glosario.tsx)"
     ]
   }
 }

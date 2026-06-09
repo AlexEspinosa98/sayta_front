@@ -109,9 +109,10 @@ export default function Home() {
     fetch(`${API_BASE}/terminos/lenguas/?page_size=50`, {
       headers: { Accept: 'application/json', ...(token ? { Authorization: `Token ${token}` } : {}) },
     })
-      .then(r => r.json())
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
       .then(d => {
-        const list: Lengua[] = d.results ?? d
+        const raw = d.results ?? d
+        const list: Lengua[] = Array.isArray(raw) ? raw : []
         setLenguas(list)
         if (list.length > 0) setLenguaId(list[0].id)
       })
@@ -150,12 +151,15 @@ export default function Home() {
           },
           body: JSON.stringify({ texto: inputText.trim(), lengua_id: lenguaId, direccion }),
         })
+        if (res.status === 401) { setApiError('Inicia sesión para usar el traductor.'); return }
         const data = await res.json()
         if (!res.ok) {
           setApiError(data.error || data.direccion?.[0] || data.texto?.[0] || data.lengua_id?.[0] || `Error ${res.status}`)
         } else {
           setResult(data)
-          const best = (data.resultados as ResultadoItem[]).findIndex(r => r.mejor_coincidencia)
+          const resultados: ResultadoItem[] = Array.isArray(data.resultados) ? data.resultados : []
+          const best = resultados.findIndex(r => r.mejor_coincidencia)
+          setResult({ ...data, resultados })
           setSelectedIdx(best >= 0 ? best : 0)
         }
       } else {
@@ -170,6 +174,7 @@ export default function Home() {
           headers: { Accept: 'application/json', ...(token ? { Authorization: `Token ${token}` } : {}) },
           body: fd,
         })
+        if (res.status === 401) { setApiError('Inicia sesión para usar la transcripción de audio.'); return }
         const data: TranscripcionResponse = await res.json()
         if (!res.ok || data.error) {
           setApiError(data.error ?? `Error ${res.status}`)

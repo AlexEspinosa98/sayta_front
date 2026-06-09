@@ -672,9 +672,10 @@ function BulkModal({ lenguaId, onClose }: { lenguaId: string; onClose: () => voi
         const token = getToken()
         const res = await fetch(`${API_BASE}/terminos/terminos/carga-masiva/`, {
           method: 'POST',
-          headers: { Accept: 'application/json', ...(token ? { Authorization: `Token ${token}` } : {}) },
+          headers: { Accept: 'application/json', Authorization: `Token ${token ?? ''}` },
           body: fd,
         })
+        if (res.status === 401) { window.location.href = '/login'; return }
         data = await res.json() as Record<string, unknown>
       } else {
         let parsed

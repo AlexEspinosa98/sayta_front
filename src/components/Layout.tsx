@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate, Link } from 'react-router-dom'
-import { BookOpen, Home, Library, Activity, LogOut, User, LogIn } from 'lucide-react'
+import { BookOpen, Home, Library, Activity, LogOut, User, LogIn, Tag } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 const CDN = 'https://cdn.unimagdalena.edu.co/images'
@@ -80,6 +80,15 @@ export default function Layout() {
                     >
                       <Activity size={15} aria-hidden="true" />
                       <span>Entrenamiento</span>
+                    </NavLink>
+                  </li>
+                  <li>
+                    <NavLink
+                      to="/etiquetado"
+                      className={({ isActive }) => `nav-link${isActive ? ' nav-link-active' : ''}`}
+                    >
+                      <Tag size={15} aria-hidden="true" />
+                      <span>Etiquetado</span>
                     </NavLink>
                   </li>
                 </>

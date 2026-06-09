@@ -57,6 +57,10 @@ export default function Login() {
           </div>
         </div>
 
+        <Link to="/" className="login-back-link login-back-link--top">
+          <ArrowLeft size={13} /> Volver al traductor
+        </Link>
+
         <h1 className="login-title">Iniciar sesión</h1>
         <p className="login-subtitle">Ingresa tus credenciales para acceder al sistema</p>
 
@@ -107,10 +111,6 @@ export default function Login() {
               : <><LogIn size={16} /> Entrar</>}
           </button>
         </form>
-
-        <Link to="/" className="login-back-link">
-          <ArrowLeft size={13} /> Volver al traductor
-        </Link>
 
         <p className="login-footer-note">
           Universidad del Magdalena · GIDEAM

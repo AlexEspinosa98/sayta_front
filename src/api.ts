@@ -13,12 +13,22 @@ export async function apiFetch(path: string, opts?: RequestInit) {
   const headers: Record<string, string> = {
     Accept: 'application/json',
     ...(isForm ? {} : { 'Content-Type': 'application/json' }),
+    // Siempre mandamos el token si existe — formato estándar DRF: "Token <value>"
     ...(token ? { Authorization: `Token ${token}` } : {}),
     ...(opts?.headers as Record<string, string> ?? {}),
   }
 
   const res  = await fetch(`${API_BASE}${path}`, { ...opts, headers })
   if (res.status === 204) return null
+
+  // 401 → token inválido/expirado → limpiar sesión y recargar al login
+  if (res.status === 401) {
+    localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem('sayta_user')
+    window.location.href = '/login'
+    return null
+  }
+
   const data = await res.json()
   if (!res.ok) throw { status: res.status, data }
   return data

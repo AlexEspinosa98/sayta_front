@@ -1498,9 +1498,10 @@ function TranscribirTab() {
       const token = getToken()
       const res   = await fetch(`${API_BASE}${ep}`, {
         method: 'POST',
-        headers: { Accept: 'application/json', ...(token ? { Authorization: `Token ${token}` } : {}) },
+        headers: { Accept: 'application/json', Authorization: `Token ${token ?? ''}` },
         body: fd,
       })
+      if (res.status === 401) { window.location.href = '/login'; return }
       const data: TranscripcionResult = await res.json()
       if (res.ok) {
         setResult(data)
@@ -1667,9 +1668,10 @@ function SubirTab() {
       const token = getToken()
       const res  = await fetch(`${API_BASE}/entrenamiento/dataset/subir/`, {
         method: 'POST',
-        headers: { Accept: 'application/json', ...(token ? { Authorization: `Token ${token}` } : {}) },
+        headers: { Accept: 'application/json', Authorization: `Token ${token ?? ''}` },
         body: fd,
       })
+      if (res.status === 401) { window.location.href = '/login'; return }
       const data = await res.json()
       if (res.ok) {
         setResult(data)

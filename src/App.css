@@ -2662,6 +2662,11 @@ a.contact-card .contact-card-icon { background: var(--blue); color: var(--white)
   border-top: 1px solid var(--gray-100);
   transition: opacity .15s;
 }
+.login-back-link--top {
+  border-top: none;
+  border-bottom: 1px solid var(--gray-100);
+  margin-bottom: 4px;
+}
 .login-back-link:hover { opacity: .7; }
 .login-divider  { width: 1px; height: 36px; background: var(--gray-200); flex-shrink: 0; }
 .login-brand-text { display: flex; flex-direction: column; gap: 2px; }

@@ -20,12 +20,12 @@ export default function App() {
           {/* Rutas públicas */}
           <Route path="/"       element={<Home />} />
           <Route path="/acerca" element={<About />} />
-          <Route path="/etiquetado" element={<Etiquetado />} />
 
           {/* Rutas protegidas — requieren login */}
           <Route element={<RequireAuth />}>
             <Route path="/glosario"      element={<Glosario />} />
             <Route path="/entrenamiento" element={<Entrenamiento />} />
+            <Route path="/etiquetado"    element={<Etiquetado />} />
           </Route>
         </Route>
       </Routes>
