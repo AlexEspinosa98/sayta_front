@@ -2,11 +2,13 @@ import { useState, useRef, useId, useEffect } from 'react'
 import {
   Mic, MicOff, Upload, Languages,
   Loader2, Volume2, Copy, Check, AlertCircle,
-  ArrowRight, ArrowLeft, ArrowRightLeft, Star,
+  ArrowRight, ArrowLeft, ArrowRightLeft, Star, XCircle,
 } from 'lucide-react'
 import {
   useSpecialKeyboard, SpecialKeyboardPanel, SpecialKeyboardToggle,
 } from '../components/SpecialKeyboard'
+import { useAudioRecorder } from '../hooks/useAudioRecorder'
+import { API_BASE, getToken } from '../api'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -41,6 +43,19 @@ interface TraduccionResponse {
   resultados: ResultadoItem[]
 }
 
+interface TranscripcionResultado { termino: string; termino_es: string; definicion: string; probabilidad: number; mejor_coincidencia: boolean }
+interface TranscripcionResponse {
+  transcripcion?: string
+  modelo?: string
+  lengua?: string
+  error?: string
+  traduccion?: {
+    conclusion?: { termino: string; termino_es: string; definicion: string; probabilidad: number }
+    resultados?: TranscripcionResultado[]
+    advertencia?: string
+  }
+}
+
 type Direccion = 'es_a_lengua' | 'lengua_a_es'
 type InputMode = 'text' | 'audio'
 
@@ -68,18 +83,20 @@ export default function Home() {
   const [direccion, setDireccion]       = useState<Direccion>('es_a_lengua')
   const [inputMode, setInputMode]       = useState<InputMode>('text')
   const [inputText, setInputText]       = useState('')
-  const [audioFile, setAudioFile]       = useState<File | null>(null)
-  const [isRecording, setIsRecording]   = useState(false)
+
+  // Audio
+  const rec         = useAudioRecorder()
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Result
   const [result, setResult]             = useState<TraduccionResponse | null>(null)
+  const [transcripcion, setTranscripcion] = useState<string | null>(null)
   const [selectedIdx, setSelectedIdx]   = useState<number>(0)
   const [apiError, setApiError]         = useState('')
   const [isLoading, setIsLoading]       = useState(false)
   const [copied, setCopied]             = useState(false)
 
   // Refs / ids
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef  = useRef<HTMLTextAreaElement>(null)
   const textareaId   = useId()
   const resultId     = useId()
@@ -97,35 +114,75 @@ export default function Home() {
       .finally(() => setLoadingL(false))
   }, [])
 
+  // Cuando se cambia a modo audio, fijar dirección a lengua→ES (transcripción)
+  const handleSetInputMode = (mode: InputMode) => {
+    setInputMode(mode)
+    if (mode === 'audio') setDireccion('lengua_a_es')
+    setResult(null); setTranscripcion(null); setApiError('')
+  }
+
   const selectedLengua = lenguas.find(l => l.id === lenguaId)
 
   const canTranslate = lenguaId !== null && (
-    inputMode === 'text' ? inputText.trim().length > 0 : audioFile !== null || isRecording
+    inputMode === 'text' ? inputText.trim().length > 0 : rec.audioFile !== null
   )
 
-  // ── Translate ───────────────────────────────────────────────────────────────
+  // ── Translate / Transcribir ─────────────────────────────────────────────────
   const handleTranslate = async () => {
     if (!canTranslate || !lenguaId) return
-    setIsLoading(true); setResult(null); setApiError('')
+    setIsLoading(true); setResult(null); setTranscripcion(null); setApiError('')
+
     try {
-      const res = await fetch(`${API}/traduccion/traducir/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ texto: inputText.trim(), lengua_id: lenguaId, direccion }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setApiError(
-          data.error
-          || data.direccion?.[0]
-          || data.texto?.[0]
-          || data.lengua_id?.[0]
-          || `Error ${res.status}`
-        )
+      if (inputMode === 'text') {
+        // Texto → POST /api/traduccion/traducir/
+        const res = await fetch(`${API}/traduccion/traducir/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ texto: inputText.trim(), lengua_id: lenguaId, direccion }),
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          setApiError(data.error || data.direccion?.[0] || data.texto?.[0] || data.lengua_id?.[0] || `Error ${res.status}`)
+        } else {
+          setResult(data)
+          const best = (data.resultados as ResultadoItem[]).findIndex(r => r.mejor_coincidencia)
+          setSelectedIdx(best >= 0 ? best : 0)
+        }
       } else {
-        setResult(data)
-        const best = (data.resultados as ResultadoItem[]).findIndex(r => r.mejor_coincidencia)
-        setSelectedIdx(best >= 0 ? best : 0)
+        // Audio → POST /api/entrenamiento/transcribir-y-traducir/
+        const fd = new FormData()
+        fd.append('lengua_id', String(lenguaId))
+        fd.append('audio', rec.audioFile!)
+        fd.append('direccion', 'lengua_a_es')
+        const token = getToken()
+        const res = await fetch(`${API_BASE}/entrenamiento/transcribir-y-traducir/`, {
+          method: 'POST',
+          headers: { Accept: 'application/json', ...(token ? { Authorization: `Token ${token}` } : {}) },
+          body: fd,
+        })
+        const data: TranscripcionResponse = await res.json()
+        if (!res.ok || data.error) {
+          setApiError(data.error ?? `Error ${res.status}`)
+        } else {
+          setTranscripcion(data.transcripcion ?? null)
+          if (data.traduccion?.resultados && data.traduccion.conclusion) {
+            // Normalizar al formato de TraduccionResponse para reutilizar el mismo UI
+            setResult({
+              texto_entrada: data.transcripcion ?? '',
+              lengua: selectedLengua as Lengua as TraduccionResponse['lengua'],
+              embedding: { version_id: '', version: data.modelo ?? '', modelo: data.modelo ?? '', num_terminos: 0 },
+              direccion: 'lengua_a_es',
+              conclusion: data.traduccion.conclusion,
+              resultados: data.traduccion.resultados.map(r => ({
+                ...r, score: r.probabilidad, coincidencia: '',
+              })),
+            })
+            const best = data.traduccion.resultados.findIndex(r => r.mejor_coincidencia)
+            setSelectedIdx(best >= 0 ? best : 0)
+          } else if (data.traduccion?.advertencia) {
+            setApiError(data.traduccion.advertencia)
+          }
+        }
       }
     } catch {
       setApiError('No se pudo conectar con el servidor.')
@@ -144,15 +201,9 @@ export default function Home() {
 
   // ── Labels ──────────────────────────────────────────────────────────────────
   const langName = selectedLengua?.nombre ?? 'lengua indígena'
-  const inputLabel = direccion === 'es_a_lengua'
-    ? 'Texto en español'
-    : `Texto en ${langName}`
-  const inputPlaceholder = direccion === 'es_a_lengua'
-    ? 'Escribe en español…'
-    : `Escribe en ${langName}…`
-  const dirLabel = direccion === 'es_a_lengua'
-    ? `Español → ${langName}`
-    : `${langName} → Español`
+  const inputLabel = direccion === 'es_a_lengua' ? 'Texto en español' : `Texto en ${langName}`
+  const inputPlaceholder = direccion === 'es_a_lengua' ? 'Escribe en español…' : `Escribe en ${langName}…`
+  const dirLabel = direccion === 'es_a_lengua' ? `Español → ${langName}` : `${langName} → Español`
 
   const bestIdx = result ? result.resultados.findIndex(r => r.mejor_coincidencia) : -1
 
@@ -190,7 +241,7 @@ export default function Home() {
                       type="button"
                       className={`lang-pill ${lenguaId === l.id ? 'lang-pill-active' : ''}`}
                       aria-pressed={lenguaId === l.id}
-                      onClick={() => { setLenguaId(l.id); setResult(null); setApiError('') }}
+                      onClick={() => { setLenguaId(l.id); setResult(null); setTranscripcion(null); setApiError('') }}
                       title={l.embedding_activo ? 'Embedding activo' : 'Sin embedding activo'}
                     >
                       {l.nombre}
@@ -201,14 +252,15 @@ export default function Home() {
               </div>
             </fieldset>
 
-            {/* Dirección */}
-            <fieldset className="tc-fieldset">
+            {/* Dirección — deshabilitada en modo audio */}
+            <fieldset className="tc-fieldset" aria-disabled={inputMode === 'audio'}>
               <legend className="tc-legend">Dirección</legend>
               <div className="mode-pills" role="group">
                 <button
                   type="button"
                   className={`mode-pill ${direccion === 'es_a_lengua' ? 'mode-pill-active' : ''}`}
                   aria-pressed={direccion === 'es_a_lengua'}
+                  disabled={inputMode === 'audio'}
                   onClick={() => { setDireccion('es_a_lengua'); setResult(null) }}
                 >
                   <ArrowRight size={13} aria-hidden="true" />
@@ -218,6 +270,7 @@ export default function Home() {
                   type="button"
                   className={`mode-pill ${direccion === 'lengua_a_es' ? 'mode-pill-active' : ''}`}
                   aria-pressed={direccion === 'lengua_a_es'}
+                  disabled={inputMode === 'audio'}
                   onClick={() => { setDireccion('lengua_a_es'); setResult(null) }}
                 >
                   <ArrowLeft size={13} aria-hidden="true" />
@@ -234,7 +287,7 @@ export default function Home() {
                   type="button"
                   className={`mode-pill ${inputMode === 'text' ? 'mode-pill-active' : ''}`}
                   aria-pressed={inputMode === 'text'}
-                  onClick={() => setInputMode('text')}
+                  onClick={() => handleSetInputMode('text')}
                 >
                   <Languages size={13} aria-hidden="true" />
                   Texto
@@ -243,7 +296,7 @@ export default function Home() {
                   type="button"
                   className={`mode-pill ${inputMode === 'audio' ? 'mode-pill-active' : ''}`}
                   aria-pressed={inputMode === 'audio'}
-                  onClick={() => setInputMode('audio')}
+                  onClick={() => handleSetInputMode('audio')}
                 >
                   <Mic size={13} aria-hidden="true" />
                   Audio
@@ -297,12 +350,12 @@ export default function Home() {
             <div className="tc-audio" role="group" aria-label="Entrada de audio">
               <button
                 type="button"
-                className={`audio-record-btn ${isRecording ? 'audio-record-btn--active' : ''}`}
-                aria-pressed={isRecording}
-                aria-label={isRecording ? 'Detener grabación' : 'Iniciar grabación de voz'}
-                onClick={() => { setIsRecording(r => !r); if (isRecording) setAudioFile(null) }}
+                className={`audio-record-btn ${rec.isRecording ? 'audio-record-btn--active' : ''}`}
+                aria-pressed={rec.isRecording}
+                aria-label={rec.isRecording ? 'Detener grabación' : 'Iniciar grabación de voz'}
+                onClick={rec.toggleRecording}
               >
-                {isRecording
+                {rec.isRecording
                   ? <><MicOff size={20} aria-hidden="true" /> Detener <span className="rec-dot" aria-hidden="true" /></>
                   : <><Mic size={20} aria-hidden="true" /> Grabar</>}
               </button>
@@ -311,30 +364,43 @@ export default function Home() {
                 onClick={() => fileInputRef.current?.click()} aria-label="Subir archivo de audio">
                 <Upload size={16} aria-hidden="true" /> Subir archivo
               </button>
-              <input ref={fileInputRef} type="file" accept="audio/*"
+              <input ref={fileInputRef} type="file" accept=".wav,.mp3,.ogg,.flac,.m4a,.mp4"
                 aria-label="Seleccionar archivo de audio" className="visually-hidden"
-                onChange={e => { setAudioFile(e.target.files?.[0] ?? null); setIsRecording(false) }} />
-              {audioFile && (
-                <span className="audio-file-tag" role="status">
-                  <Volume2 size={12} aria-hidden="true" />
-                  <span className="truncate">{audioFile.name}</span>
-                </span>
+                onChange={e => {
+                  const f = e.target.files?.[0]
+                  if (f) { rec.clearAudio(); rec.setFromFile(f) }
+                  e.target.value = ''
+                }} />
+              {rec.audioFile && rec.audioUrl && (
+                <div className="tc-audio-preview">
+                  <audio controls src={rec.audioUrl} className="ent-audio-player" />
+                  <div className="ent-audio-preview-info">
+                    <Volume2 size={12} />
+                    <span className="truncate">{rec.audioFile.name}</span>
+                    <button className="ent-btn-icon" onClick={rec.clearAudio} type="button" aria-label="Quitar audio">
+                      <XCircle size={14} />
+                    </button>
+                  </div>
+                </div>
               )}
+              <p className="tc-audio-hint">Graba voz en lengua indígena — se transcribe y traduce al español</p>
             </div>
           )}
 
-          {/* ── Botón traducir ─────────────────────────────── */}
+          {/* ── Botón principal ────────────────────────────── */}
           <button
             type="button"
             className="translate-btn"
             onClick={handleTranslate}
-            disabled={isLoading || !canTranslate}
+            disabled={isLoading || !canTranslate || rec.isRecording}
             aria-busy={isLoading}
-            title="También puedes pulsar Ctrl+Enter"
+            title={inputMode === 'text' ? 'También puedes pulsar Ctrl+Enter' : undefined}
           >
             {isLoading
-              ? <><Loader2 size={18} className="spin" aria-hidden="true" /> Buscando…</>
-              : <><Languages size={18} aria-hidden="true" /> Traducir</>}
+              ? <><Loader2 size={18} className="spin" aria-hidden="true" /> {inputMode === 'audio' ? 'Transcribiendo…' : 'Buscando…'}</>
+              : inputMode === 'audio'
+                ? <><Mic size={18} aria-hidden="true" /> {rec.audioFile ? 'Transcribir y traducir' : 'Graba o sube un audio'}</>
+                : <><Languages size={18} aria-hidden="true" /> Traducir</>}
           </button>
 
           {/* ── Error ──────────────────────────────────────── */}
@@ -349,7 +415,15 @@ export default function Home() {
           {isLoading && (
             <div className="tc-result tc-result--loading">
               <Loader2 size={20} className="spin" aria-hidden="true" />
-              <span>Buscando términos similares…</span>
+              <span>{inputMode === 'audio' ? 'Transcribiendo audio…' : 'Buscando términos similares…'}</span>
+            </div>
+          )}
+
+          {/* ── Transcripción (solo modo audio) ────────────── */}
+          {transcripcion && !isLoading && (
+            <div className="tc-transcripcion" role="status">
+              <span className="tc-transcripcion-label"><Mic size={13} /> Transcripción</span>
+              <span className="tc-transcripcion-text">{transcripcion}</span>
             </div>
           )}
 
@@ -421,9 +495,14 @@ export default function Home() {
               </div>
 
               {/* ── Info embedding ─────────────────────────── */}
-              <p className="tc-emb-info">
-                Embedding {result.embedding.version} · {result.embedding.num_terminos.toLocaleString()} términos · {result.embedding.modelo}
-              </p>
+              {result.embedding.modelo && (
+                <p className="tc-emb-info">
+                  {result.embedding.version
+                    ? `Embedding ${result.embedding.version} · ${result.embedding.num_terminos.toLocaleString()} términos · `
+                    : 'Modelo ASR: '}
+                  {result.embedding.modelo}
+                </p>
+              )}
 
             </div>
           )}

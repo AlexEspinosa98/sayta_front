@@ -1,5 +1,5 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { BookOpen, Home, Library, Activity, LogOut, User } from 'lucide-react'
+import { NavLink, Outlet, useNavigate, Link } from 'react-router-dom'
+import { BookOpen, Home, Library, Activity, LogOut, User, LogIn } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 const CDN = 'https://cdn.unimagdalena.edu.co/images'
@@ -62,24 +62,28 @@ export default function Layout() {
                   <span>Traductor</span>
                 </NavLink>
               </li>
-              <li>
-                <NavLink
-                  to="/glosario"
-                  className={({ isActive }) => `nav-link${isActive ? ' nav-link-active' : ''}`}
-                >
-                  <Library size={15} aria-hidden="true" />
-                  <span>Glosario</span>
-                </NavLink>
-              </li>
-              <li>
-                <NavLink
-                  to="/entrenamiento"
-                  className={({ isActive }) => `nav-link${isActive ? ' nav-link-active' : ''}`}
-                >
-                  <Activity size={15} aria-hidden="true" />
-                  <span>Entrenamiento</span>
-                </NavLink>
-              </li>
+              {isAuthenticated && (
+                <>
+                  <li>
+                    <NavLink
+                      to="/glosario"
+                      className={({ isActive }) => `nav-link${isActive ? ' nav-link-active' : ''}`}
+                    >
+                      <Library size={15} aria-hidden="true" />
+                      <span>Glosario</span>
+                    </NavLink>
+                  </li>
+                  <li>
+                    <NavLink
+                      to="/entrenamiento"
+                      className={({ isActive }) => `nav-link${isActive ? ' nav-link-active' : ''}`}
+                    >
+                      <Activity size={15} aria-hidden="true" />
+                      <span>Entrenamiento</span>
+                    </NavLink>
+                  </li>
+                </>
+              )}
               <li>
                 <NavLink
                   to="/acerca"
@@ -92,7 +96,7 @@ export default function Layout() {
             </ul>
           </nav>
 
-          {isAuthenticated && user && (
+          {isAuthenticated && user ? (
             <div className="header-user">
               <div className="header-user-chip">
                 <User size={13} aria-hidden="true" />
@@ -108,6 +112,11 @@ export default function Layout() {
                 <LogOut size={15} />
               </button>
             </div>
+          ) : (
+            <Link to="/login" className="header-login-btn">
+              <LogIn size={14} aria-hidden="true" />
+              <span>Iniciar sesión</span>
+            </Link>
           )}
         </div>
       </header>
