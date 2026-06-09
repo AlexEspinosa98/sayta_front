@@ -89,7 +89,7 @@ export default function Home() {
     fetch(`${API}/terminos/lenguas/?page_size=50`)
       .then(r => r.json())
       .then(d => {
-        const list: Lengua[] = d.results ?? d
+        const list: Lengua[] = Array.isArray(d?.results) ? d.results : Array.isArray(d) ? d : []
         setLenguas(list)
         if (list.length > 0) setLenguaId(list[0].id)
       })
