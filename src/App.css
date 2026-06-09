@@ -2615,6 +2615,20 @@ a.contact-card .contact-card-icon { background: var(--blue); color: var(--white)
 .login-logo-gideam { height: 46px; width: auto; object-fit: contain; }
 .login-logo-sayta  { height: 46px; width: auto; border-radius: 8px; }
 
+/* ── Home — login CTA banner ─────────────────────────────────────────────────── */
+.tp-login-cta {
+  display: inline-flex; align-items: center; gap: 8px;
+  margin-top: 10px;
+  padding: 9px 18px;
+  background: var(--blue); color: var(--white);
+  border-radius: var(--r-sm);
+  font-size: .84rem; font-weight: 700;
+  font-family: var(--font);
+  text-decoration: none;
+  transition: background .15s, opacity .15s;
+}
+.tp-login-cta:hover { background: var(--blue-dark); }
+
 /* ── Home — audio mode extras ───────────────────────────────────────────────── */
 .tc-audio-preview {
   display: flex; flex-direction: column; gap: 6px;

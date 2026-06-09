@@ -2,17 +2,17 @@ import { useState, useRef, useId, useEffect } from 'react'
 import {
   Mic, MicOff, Upload, Languages,
   Loader2, Volume2, Copy, Check, AlertCircle,
-  ArrowRight, ArrowLeft, ArrowRightLeft, Star, XCircle,
+  ArrowRight, ArrowLeft, ArrowRightLeft, Star, XCircle, LogIn,
 } from 'lucide-react'
 import {
   useSpecialKeyboard, SpecialKeyboardPanel, SpecialKeyboardToggle,
 } from '../components/SpecialKeyboard'
+import { Link } from 'react-router-dom'
 import { useAudioRecorder } from '../hooks/useAudioRecorder'
 import { API_BASE, getToken } from '../api'
+import { useAuth } from '../context/AuthContext'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-
-const API = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
 
 interface Lengua {
   id: number; codigo: string; nombre: string; activa: boolean
@@ -74,6 +74,8 @@ function ProbBadge({ prob }: { prob: number }) {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function Home() {
+  const { isAuthenticated } = useAuth()
+
   // Lenguas
   const [lenguas, setLenguas]           = useState<Lengua[]>([])
   const [loadingLenguas, setLoadingL]   = useState(true)
@@ -103,7 +105,10 @@ export default function Home() {
   const kb = useSpecialKeyboard(textareaRef, inputText, setInputText)
 
   useEffect(() => {
-    fetch(`${API}/terminos/lenguas/?page_size=50`)
+    const token = getToken()
+    fetch(`${API_BASE}/terminos/lenguas/?page_size=50`, {
+      headers: { Accept: 'application/json', ...(token ? { Authorization: `Token ${token}` } : {}) },
+    })
       .then(r => r.json())
       .then(d => {
         const list: Lengua[] = d.results ?? d
@@ -135,9 +140,14 @@ export default function Home() {
     try {
       if (inputMode === 'text') {
         // Texto → POST /api/traduccion/traducir/
-        const res = await fetch(`${API}/traduccion/traducir/`, {
+        const token = getToken()
+        const res = await fetch(`${API_BASE}/traduccion/traducir/`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            ...(token ? { Authorization: `Token ${token}` } : {}),
+          },
           body: JSON.stringify({ texto: inputText.trim(), lengua_id: lenguaId, direccion }),
         })
         const data = await res.json()
@@ -217,6 +227,13 @@ export default function Home() {
             Traductor SAYTA
           </h1>
           <p className="tp-subtitle">Búsqueda semántica por embeddings · lenguas indígenas colombianas</p>
+
+          {!isAuthenticated && (
+            <Link to="/login" className="tp-login-cta">
+              <LogIn size={15} aria-hidden="true" />
+              Iniciar sesión para acceder a Glosario y Entrenamiento
+            </Link>
+          )}
         </header>
 
         <div className="tc" role="region" aria-label="Panel de traducción">
