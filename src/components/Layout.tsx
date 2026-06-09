@@ -1,12 +1,20 @@
-import { NavLink, Outlet } from 'react-router-dom'
-import { BookOpen, Home, Library, Activity } from 'lucide-react'
+import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { BookOpen, Home, Library, Activity, LogOut, User } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
 
 const CDN = 'https://cdn.unimagdalena.edu.co/images'
 
 export default function Layout() {
+  const { isAuthenticated, user, logout } = useAuth()
+  const navigate = useNavigate()
+
+  const handleLogout = async () => {
+    await logout()
+    navigate('/login', { replace: true })
+  }
+
   return (
     <div className="app">
-      {/* Skip navigation — primer elemento del DOM, solo visible con foco */}
       <a href="#main-content" className="skip-link">
         Saltar al contenido principal
       </a>
@@ -49,7 +57,6 @@ export default function Layout() {
                   to="/"
                   end
                   className={({ isActive }) => `nav-link${isActive ? ' nav-link-active' : ''}`}
-                  aria-current={undefined}
                 >
                   <Home size={15} aria-hidden="true" />
                   <span>Traductor</span>
@@ -84,6 +91,24 @@ export default function Layout() {
               </li>
             </ul>
           </nav>
+
+          {isAuthenticated && user && (
+            <div className="header-user">
+              <div className="header-user-chip">
+                <User size={13} aria-hidden="true" />
+                <span className="header-user-name">{user.username}</span>
+                <span className="header-user-rol">{user.rol_display}</span>
+              </div>
+              <button
+                className="header-logout-btn"
+                onClick={handleLogout}
+                aria-label="Cerrar sesión"
+                title="Cerrar sesión"
+              >
+                <LogOut size={15} />
+              </button>
+            </div>
+          )}
         </div>
       </header>
 

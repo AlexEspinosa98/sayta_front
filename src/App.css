@@ -2532,3 +2532,287 @@ a.contact-card .contact-card-icon { background: var(--blue); color: var(--white)
   .ent-lenguas-grid { grid-template-columns: 1fr; }
   .ent-upload-result-grid { grid-template-columns: 1fr; }
 }
+
+/* ══════════════════════════════════════════
+   HEADER — USER CHIP + LOGOUT
+══════════════════════════════════════════ */
+.header-user {
+  display: flex; align-items: center; gap: 8px;
+  flex-shrink: 0;
+}
+.header-user-chip {
+  display: flex; align-items: center; gap: 6px;
+  background: rgba(255,255,255,.14);
+  border: 1px solid rgba(255,255,255,.2);
+  color: rgba(255,255,255,.92);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: .78rem; font-weight: 600;
+}
+.header-user-name { color: var(--white); }
+.header-user-rol {
+  background: rgba(255,255,255,.18);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: .72rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .04em;
+  color: rgba(255,255,255,.85);
+}
+.header-logout-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: 50%;
+  background: rgba(255,255,255,.1);
+  border: 1px solid rgba(255,255,255,.2);
+  color: rgba(255,255,255,.85);
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.header-logout-btn:hover {
+  background: rgba(255,255,255,.22);
+  color: var(--white);
+}
+
+/* ══════════════════════════════════════════
+   LOGIN PAGE
+══════════════════════════════════════════ */
+.login-page {
+  min-height: 100vh;
+  background: linear-gradient(160deg, var(--blue-dark) 0%, var(--blue) 55%, var(--blue-mid) 100%);
+  display: flex; align-items: center; justify-content: center;
+  padding: clamp(24px, 5vw, 64px) clamp(16px, 4vw, 32px);
+}
+.login-card {
+  width: 100%; max-width: 420px;
+  background: var(--white);
+  border-radius: 18px;
+  box-shadow: 0 16px 60px rgba(0,0,0,.28);
+  padding: clamp(28px, 5vw, 44px);
+  display: flex; flex-direction: column; gap: 20px;
+}
+.login-brand {
+  display: flex; align-items: center; gap: 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--gray-200);
+}
+.login-logo-uni { height: 52px; width: auto; }
+.login-logo-sayta { height: 46px; width: auto; border-radius: 8px; }
+.login-divider  { width: 1px; height: 36px; background: var(--gray-200); flex-shrink: 0; }
+.login-brand-text { display: flex; flex-direction: column; gap: 2px; }
+.login-brand-name { font-size: 1rem; font-weight: 800; color: var(--blue); letter-spacing: .05em; }
+.login-brand-sub  { font-size: .72rem; color: var(--gray-600); line-height: 1.4; }
+
+.login-title    { font-size: 1.35rem; font-weight: 800; color: var(--gray-900); }
+.login-subtitle { font-size: .88rem; color: var(--gray-600); margin-top: -12px; }
+
+.login-form { display: flex; flex-direction: column; gap: 14px; }
+.login-field { display: flex; flex-direction: column; gap: 5px; }
+.login-label { font-size: .82rem; font-weight: 700; color: var(--gray-700); }
+
+.login-error {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--red-light); border: 1px solid #fbc8d4;
+  color: var(--red); border-radius: var(--r-sm);
+  padding: 10px 14px; font-size: .85rem;
+}
+
+.login-btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  background: var(--blue); color: var(--white);
+  border: none; border-radius: var(--r-sm);
+  padding: 12px 20px; font-size: .9rem; font-weight: 700;
+  font-family: var(--font); cursor: pointer;
+  min-height: 46px; margin-top: 4px;
+  transition: background .15s;
+}
+.login-btn:hover:not(:disabled) { background: var(--blue-dark); }
+.login-btn:disabled { opacity: .55; cursor: not-allowed; }
+
+.login-footer-note {
+  text-align: center; font-size: .78rem; color: var(--gray-400);
+  border-top: 1px solid var(--gray-200); padding-top: 14px;
+}
+
+/* ── Data Augmentation Panel ────────────────────────────────────────────────── */
+.aug-panel {
+  border: 1px solid var(--gray-200);
+  border-radius: var(--r);
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.aug-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 14px;
+  background: var(--gray-50);
+  border-bottom: 1px solid var(--gray-200);
+  cursor: pointer;
+  user-select: none;
+}
+.aug-header:hover { background: var(--gray-100); }
+.aug-header-label { font-size: .88rem; font-weight: 700; color: var(--gray-800); flex: 1; }
+.aug-header-sub   { font-size: .78rem; color: var(--gray-500); }
+
+.aug-global-toggle {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--gray-100);
+  background: var(--white);
+}
+.aug-global-toggle label { font-size: .86rem; font-weight: 600; color: var(--gray-800); cursor: pointer; }
+
+.aug-body {
+  padding: 14px;
+  background: var(--white);
+}
+
+.aug-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.aug-card {
+  border: 1px solid var(--gray-200);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  opacity: .7;
+  transition: opacity .15s, border-color .15s;
+}
+.aug-card--on {
+  opacity: 1;
+  border-color: var(--blue);
+}
+
+.aug-card-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 12px;
+  background: var(--gray-50);
+  border-bottom: 1px solid var(--gray-100);
+  cursor: pointer;
+}
+.aug-card--on .aug-card-head { background: rgba(1,70,137,.06); border-bottom-color: rgba(1,70,137,.15); }
+.aug-card-head label { font-size: .82rem; font-weight: 700; color: var(--gray-800); cursor: pointer; flex: 1; }
+
+.aug-rec-badge {
+  font-size: .62rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+  padding: 2px 5px; border-radius: 4px;
+  background: rgba(1,70,137,.1); color: var(--blue);
+}
+
+.aug-card-body {
+  padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+
+.aug-field {
+  display: flex; flex-direction: column; gap: 4px;
+}
+.aug-field label { font-size: .76rem; font-weight: 600; color: var(--gray-600); }
+.aug-field input[type="number"] {
+  width: 100%; padding: 5px 8px;
+  border: 1px solid var(--gray-200); border-radius: var(--r-sm);
+  font-size: .82rem; font-family: var(--font); color: var(--gray-900);
+  background: var(--white);
+  transition: border-color .12s;
+}
+.aug-field input[type="number"]:focus {
+  outline: none; border-color: var(--blue);
+}
+
+.aug-count-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 5px;
+  border-radius: 9px;
+  background: var(--blue); color: var(--white);
+  font-size: .65rem; font-weight: 800;
+}
+.aug-off-badge {
+  display: inline-flex; align-items: center;
+  padding: 2px 7px; border-radius: 9px;
+  background: var(--gray-100); color: var(--gray-500);
+  font-size: .72rem; font-weight: 600;
+}
+
+/* Augmentation detail block (experiment view) */
+.aug-detail-block {
+  margin-top: 10px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+.aug-detail-block h5 {
+  margin: 0; padding: 9px 12px;
+  font-size: .78rem; font-weight: 800; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--blue);
+  background: rgba(1,70,137,.05);
+  border-bottom: 1px solid var(--gray-100);
+  display: flex; align-items: center; gap: 8px;
+}
+.aug-detail-tecnicas {
+  display: flex; flex-direction: column; gap: 0;
+}
+.aug-detail-tecnica {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--gray-100);
+  font-size: .82rem;
+}
+.aug-detail-tecnica:last-child { border-bottom: none; }
+.aug-detail-tecnica-name { font-weight: 700; color: var(--gray-800); min-width: 140px; }
+.aug-detail-tecnica-param { color: var(--gray-500); font-size: .78rem; }
+.aug-detail-tecnica-param strong { color: var(--gray-700); }
+
+/* ── Modelos tab — expandable experiment rows ───────────────────────────────── */
+.ent-btn-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px;
+  padding: 0; border: 1px solid var(--gray-200);
+  border-radius: 4px; background: var(--white);
+  color: var(--gray-500); cursor: pointer;
+  transition: border-color .12s, color .12s, background .12s;
+}
+.ent-btn-icon:hover { border-color: var(--blue); color: var(--blue); background: rgba(1,70,137,.05); }
+
+.ent-exp-detail-row > td {
+  background: var(--gray-50);
+  padding: 10px 14px !important;
+  border-bottom: 2px solid var(--gray-200) !important;
+}
+
+.mod-exp-list {
+  display: flex; flex-direction: column; gap: 6px;
+}
+
+.mod-exp-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--r-sm);
+  background: var(--white);
+  transition: border-color .12s;
+}
+.mod-exp-row--active {
+  border-color: var(--blue);
+  background: rgba(1,70,137,.04);
+}
+
+.mod-exp-info {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  flex: 1; min-width: 0;
+}
+
+.ent-btn--sm {
+  padding: 4px 9px !important;
+  font-size: .78rem !important;
+  min-height: 26px !important;
+}
+
+.ent-loading-sm {
+  display: flex; align-items: center; gap: 6px;
+  font-size: .82rem; color: var(--gray-500);
+  padding: 4px 0;
+}
+.ent-err-sm {
+  font-size: .82rem; color: var(--red);
+  margin: 0; padding: 4px 0;
+}

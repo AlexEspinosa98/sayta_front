@@ -1,17 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import {
-  Lock, Database, Cpu, Play, Mic, MicOff, Upload, Volume2,
+  Database, Cpu, Play, Mic, MicOff, Upload, Volume2,
   Loader2, CheckCircle2, AlertTriangle, XCircle,
   ChevronDown, ChevronRight, Download, HardDrive,
   Star, RefreshCw, BarChart2, Languages, Activity, Zap, FolderPlus,
+  Wand2,
   type LucideIcon,
 } from 'lucide-react'
-
-// ── Constants ─────────────────────────────────────────────────────────────────
-
-const API      = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
-const ADMIN_PW = 'Un1m4gd4l3n4'
-const SESS_KEY = 'entrenamiento_auth'
+import { apiFetch as sharedFetch, API_BASE, getToken } from '../api'
+import { useAuth } from '../context/AuthContext'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -105,23 +102,41 @@ type Expand = ComunidadDetalle | 'loading' | null
 type Tab = 'datos' | 'modelos' | 'entrenar' | 'experimentos' | 'transcribir' | 'subir'
 type DataMode = 'todos' | 'comunidades' | 'sesiones'
 
-// ── API helper ────────────────────────────────────────────────────────────────
+// ── Augmentation types ────────────────────────────────────────────────────────
 
-async function apiFetch(path: string, opts?: RequestInit) {
-  const isForm = opts?.body instanceof FormData
-  const res = await fetch(`${API}${path}`, {
-    ...opts,
-    headers: isForm
-      ? { Accept: 'application/json', ...(opts?.headers ?? {}) }
-      : { 'Content-Type': 'application/json', Accept: 'application/json', ...(opts?.headers ?? {}) },
-  })
-  const data = await res.json()
-  if (!res.ok) throw { status: res.status, data }
-  return data
+interface AugTecnicas {
+  ruido_gaussiano:   { habilitado: boolean; porcentaje: number; intensidad: number }
+  cambio_velocidad:  { habilitado: boolean; porcentaje: number; factor_min: number; factor_max: number }
+  cambio_tono:       { habilitado: boolean; porcentaje: number; semitonos_min: number; semitonos_max: number }
+  reduccion_volumen: { habilitado: boolean; porcentaje: number; factor_min: number; factor_max: number }
+  recorte_tiempo:    { habilitado: boolean; porcentaje: number; max_porcentaje_clip: number }
+  eco:               { habilitado: boolean; porcentaje: number; delay_ms: number; decay: number }
 }
 
-function apiErr(e: unknown, fallback = 'Error desconocido.') {
-  return (e as { data?: { error?: string } })?.data?.error ?? fallback
+interface AugConfig {
+  habilitado: boolean
+  tecnicas: AugTecnicas
+}
+
+const DEFAULT_AUG: AugConfig = {
+  habilitado: false,
+  tecnicas: {
+    ruido_gaussiano:   { habilitado: false, porcentaje: 30, intensidad: 0.005 },
+    cambio_velocidad:  { habilitado: false, porcentaje: 20, factor_min: 0.9,  factor_max: 1.1 },
+    cambio_tono:       { habilitado: false, porcentaje: 20, semitonos_min: -2, semitonos_max: 2 },
+    reduccion_volumen: { habilitado: false, porcentaje: 20, factor_min: 0.5,  factor_max: 0.9 },
+    recorte_tiempo:    { habilitado: false, porcentaje: 15, max_porcentaje_clip: 10 },
+    eco:               { habilitado: false, porcentaje: 10, delay_ms: 50, decay: 0.2 },
+  },
+}
+
+// ── API helper ────────────────────────────────────────────────────────────────
+
+const apiFetch = sharedFetch
+
+function apiErr(e: unknown, fallback = 'Error desconocido.'): string {
+  const d = (e as { data?: Record<string, unknown> })?.data
+  return (d?.error as string | undefined) ?? (d?.detail as string | undefined) ?? fallback
 }
 
 // ── Mini components ───────────────────────────────────────────────────────────
@@ -140,48 +155,13 @@ function EstadoBadge({ estado, isActive }: { estado: string; isActive: boolean }
   return <span className={`ent-estado ${map[estado] ?? ''}`}>{estado}</span>
 }
 
-// ── Password gate ─────────────────────────────────────────────────────────────
-
-function PasswordGate({ onAuth }: { onAuth: () => void }) {
-  const [pw, setPw] = useState('')
-  const [err, setErr] = useState(false)
-  const [shake, setShake] = useState(false)
-
-  const submit = () => {
-    if (pw === ADMIN_PW) { sessionStorage.setItem(SESS_KEY, '1'); onAuth() }
-    else { setErr(true); setShake(true); setTimeout(() => setShake(false), 500) }
-  }
-
-  return (
-    <div className="ent-gate">
-      <div className="ent-gate-icon"><Lock size={32} /></div>
-      <h2 className="ent-gate-title">Módulo de Entrenamiento ASR</h2>
-      <p className="ent-gate-sub">Uso exclusivo del equipo de investigación. Ingresa la contraseña para acceder.</p>
-      <div className={`ent-gate-form${shake ? ' shake' : ''}`}>
-        <input
-          type="password" autoFocus
-          className={`gl-input${err ? ' gl-input--error' : ''}`}
-          placeholder="Contraseña de administrador"
-          value={pw}
-          onChange={e => { setPw(e.target.value); setErr(false) }}
-          onKeyDown={e => e.key === 'Enter' && submit()}
-        />
-        <button className="ent-btn ent-btn--primary" onClick={submit} type="button">
-          <Lock size={14} /> Ingresar
-        </button>
-      </div>
-      {err && <p className="ent-gate-err">Contraseña incorrecta.</p>}
-    </div>
-  )
-}
-
 // ══════════════════════════════════════════════════════════════════════════════
 // DatosTab — HU-15 + HU-15b + HU-15c + HU-16
 // ══════════════════════════════════════════════════════════════════════════════
 
 function sesionId(s: SesionKey) { return `${s.comunidad}::${s.jornada}` }
 
-function DatosTab({ onSelectSesiones }: { onSelectSesiones: (s: SesionKey[]) => void }) {
+function DatosTab({ onSelectSesiones, canManage }: { onSelectSesiones: (s: SesionKey[]) => void; canManage: boolean }) {
   const [lenguasASR, setLenguasASR] = useState<LenguaASR[]>([])
   const [dataset, setDataset]       = useState<{ base_path: string; existe: boolean; comunidades: ComunidadStat[] } | null>(null)
   const [sesiones, setSesiones]     = useState<Sesion[]>([])
@@ -289,16 +269,18 @@ function DatosTab({ onSelectSesiones }: { onSelectSesiones: (s: SesionKey[]) => 
       {/* ── Dataset (HU-15b / HU-15c) ── */}
       <div className="ent-section-head" style={{ marginTop: 8 }}>
         <h3 className="ent-subsection-title">Datos de entrenamiento</h3>
-        <div className="ent-view-toggle">
-          <button
-            className={`ent-view-btn ${dataView === 'comunidad' ? 'ent-view-btn--active' : ''}`}
-            onClick={() => setDataView('comunidad')} type="button"
-          >Por comunidad</button>
-          <button
-            className={`ent-view-btn ${dataView === 'jornada' ? 'ent-view-btn--active' : ''}`}
-            onClick={() => setDataView('jornada')} type="button"
-          >Por jornada</button>
-        </div>
+        {canManage && (
+          <div className="ent-view-toggle">
+            <button
+              className={`ent-view-btn ${dataView === 'comunidad' ? 'ent-view-btn--active' : ''}`}
+              onClick={() => setDataView('comunidad')} type="button"
+            >Por comunidad</button>
+            <button
+              className={`ent-view-btn ${dataView === 'jornada' ? 'ent-view-btn--active' : ''}`}
+              onClick={() => setDataView('jornada')} type="button"
+            >Por jornada</button>
+          </div>
+        )}
       </div>
 
       {!dataset?.existe && (
@@ -365,7 +347,7 @@ function DatosTab({ onSelectSesiones }: { onSelectSesiones: (s: SesionKey[]) => 
         </div>
       )}
 
-      {dataset?.existe && dataView === 'jornada' && (
+      {dataset?.existe && dataView === 'jornada' && canManage && (
         <div className="ent-sesiones-wrap">
           <p className="ent-hint" style={{ marginBottom: 8 }}>
             Marca las jornadas que quieres usar en el entrenamiento. Las selecciones se pre-cargarán en la pestaña <strong>Entrenar</strong>.
@@ -427,12 +409,14 @@ function DatosTab({ onSelectSesiones }: { onSelectSesiones: (s: SesionKey[]) => 
 // ModelosTab — HU-17 + HU-18 + HU-19
 // ══════════════════════════════════════════════════════════════════════════════
 
-function ModelosTab() {
+function ModelosTab({ canManage }: { canManage: boolean }) {
   const [catalogo, setCatalogo]     = useState<ModeloHF[]>([])
   const [descargados, setDescargados] = useState<ModeloLocal[]>([])
   const [loading, setLoading]       = useState(true)
   const [dlState, setDlState]       = useState<Record<string, boolean>>({})
   const [dlErr, setDlErr]           = useState<Record<string, string>>({})
+  const [expExpand, setExpExpand]   = useState<Record<number, Experimento[] | 'loading' | null>>({})
+  const [activErr, setActivErr]     = useState<Record<number, string>>({})
 
   const loadAll = useCallback(async () => {
     setLoading(true)
@@ -462,6 +446,34 @@ function ModelosTab() {
       setDlErr(p => ({ ...p, [m.nombre_hf]: apiErr(e, 'Error al descargar.') }))
     } finally {
       setDlState(p => ({ ...p, [m.nombre_hf]: false }))
+    }
+  }
+
+  const toggleExpExps = async (m: ModeloLocal) => {
+    if (expExpand[m.id] !== undefined) {
+      setExpExpand(p => { const n = { ...p }; delete n[m.id]; return n })
+      return
+    }
+    setExpExpand(p => ({ ...p, [m.id]: 'loading' }))
+    try {
+      const data = await apiFetch(`/entrenamiento/experimentos/?modelo_id=${m.id}`)
+      const all: Experimento[] = data.experimentos ?? []
+      const filtered = all.filter(e => e.modelo_nombre === m.nombre_hf || all.length > 0 && data.experimentos)
+      setExpExpand(p => ({ ...p, [m.id]: filtered }))
+    } catch {
+      setExpExpand(p => ({ ...p, [m.id]: null }))
+    }
+  }
+
+  const activarExp = async (modeloId: number, expId: string) => {
+    setActivErr(p => { const n = { ...p }; delete n[modeloId]; return n })
+    try {
+      await apiFetch(`/entrenamiento/experimentos/${expId}/activar/`, { method: 'POST' })
+      const data = await apiFetch(`/entrenamiento/experimentos/?modelo_id=${modeloId}`)
+      const all: Experimento[] = data.experimentos ?? []
+      setExpExpand(p => ({ ...p, [modeloId]: all }))
+    } catch (e) {
+      setActivErr(p => ({ ...p, [modeloId]: apiErr(e, 'Error al activar.') }))
     }
   }
 
@@ -495,17 +507,21 @@ function ModelosTab() {
               <span className="ent-tipo-pill">{m.tipo}</span>
             </div>
             {dlErr[m.nombre_hf] && <p className="ent-err-sm">{dlErr[m.nombre_hf]}</p>}
-            <button
-              className={`ent-btn ${m.descargado ? 'ent-btn--ghost' : 'ent-btn--primary'}`}
-              disabled={m.descargado || dlState[m.nombre_hf]}
-              onClick={() => descargar(m)} type="button"
-            >
-              {dlState[m.nombre_hf]
-                ? <><Loader2 size={13} className="spin" /> Descargando…</>
-                : m.descargado
-                  ? <><HardDrive size={13} /> Disponible</>
-                  : <><Download size={13} /> Descargar</>}
-            </button>
+            {canManage ? (
+              <button
+                className={`ent-btn ${m.descargado ? 'ent-btn--ghost' : 'ent-btn--primary'}`}
+                disabled={m.descargado || dlState[m.nombre_hf]}
+                onClick={() => descargar(m)} type="button"
+              >
+                {dlState[m.nombre_hf]
+                  ? <><Loader2 size={13} className="spin" /> Descargando…</>
+                  : m.descargado
+                    ? <><HardDrive size={13} /> Disponible</>
+                    : <><Download size={13} /> Descargar</>}
+              </button>
+            ) : m.descargado ? (
+              <span className="ent-badge ent-badge--ok"><HardDrive size={11} /> Disponible</span>
+            ) : null}
           </div>
         ))}
       </div>
@@ -515,20 +531,300 @@ function ModelosTab() {
           <h3 className="ent-subsection-title" style={{ marginTop: 8 }}>Modelos en servidor local ({descargados.length})</h3>
           <div className="ent-table-wrap">
             <table className="ent-table">
-              <thead><tr><th>Modelo</th><th>Tipo</th><th>Ruta</th><th>Descargado</th></tr></thead>
+              <thead><tr><th /><th>Modelo</th><th>Tipo</th><th>Ruta</th><th>Descargado</th></tr></thead>
               <tbody>
-                {descargados.map(m => (
-                  <tr key={m.id}>
-                    <td className="ent-td-bold">{m.nombre_hf}</td>
-                    <td><span className="ent-tipo-pill">{m.tipo_display}</span></td>
-                    <td className="ent-td-mono">{m.ruta_local}</td>
-                    <td>{new Date(m.created_at).toLocaleDateString('es-CO')}</td>
-                  </tr>
-                ))}
+                {descargados.flatMap(m => {
+                  const exps = expExpand[m.id]
+                  const mainRow = (
+                    <tr key={m.id}>
+                      <td>
+                        <button className="ent-btn-icon" onClick={() => toggleExpExps(m)} type="button"
+                          title="Ver experimentos entrenados con este modelo">
+                          {exps !== undefined ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                        </button>
+                      </td>
+                      <td className="ent-td-bold">{m.nombre_hf}</td>
+                      <td><span className="ent-tipo-pill">{m.tipo_display}</span></td>
+                      <td className="ent-td-mono">{m.ruta_local}</td>
+                      <td>{new Date(m.created_at).toLocaleDateString('es-CO')}</td>
+                    </tr>
+                  )
+
+                  if (exps === undefined) return [mainRow]
+
+                  const expandRow = (
+                    <tr key={`${m.id}-exps`} className="ent-exp-detail-row">
+                      <td colSpan={5}>
+                        {exps === 'loading' ? (
+                          <div className="ent-loading-sm"><Loader2 size={13} className="spin" /> Cargando experimentos…</div>
+                        ) : exps === null ? (
+                          <p className="ent-err-sm">No se pudieron cargar los experimentos.</p>
+                        ) : exps.length === 0 ? (
+                          <p className="ent-hint" style={{ padding: '8px 0' }}>Sin experimentos para este modelo todavía.</p>
+                        ) : (
+                          <div className="mod-exp-list">
+                            {activErr[m.id] && (
+                              <div className="tc-api-error" style={{ marginBottom: 8 }}>
+                                <AlertTriangle size={13} /><span>{activErr[m.id]}</span>
+                              </div>
+                            )}
+                            {exps.map(exp => (
+                              <div key={exp.id} className={`mod-exp-row ${exp.is_active ? 'mod-exp-row--active' : ''}`}>
+                                <div className="mod-exp-info">
+                                  <span className="ent-td-bold">{exp.nombre}</span>
+                                  <span className="ent-hint">{exp.lengua_nombre}</span>
+                                  <EstadoBadge estado={exp.estado} isActive={exp.is_active} />
+                                  {exp.metricas?.eval_wer != null && <WerBadge wer={exp.metricas.eval_wer} />}
+                                  <span className="ent-hint">{new Date(exp.created_at).toLocaleDateString('es-CO')}</span>
+                                </div>
+                                {canManage && exp.estado === 'completado' && !exp.is_active && (
+                                  <button
+                                    className="ent-btn ent-btn--sm ent-btn--primary"
+                                    onClick={() => activarExp(m.id, exp.id)} type="button"
+                                  >
+                                    <Zap size={11} /> Activar
+                                  </button>
+                                )}
+                                {exp.is_active && (
+                                  <span className="ent-badge ent-badge--ok"><CheckCircle2 size={10} /> Activo</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )
+
+                  return [mainRow, expandRow]
+                })}
               </tbody>
             </table>
           </div>
         </>
+      )}
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// AugmentationPanel — HU-AUG-03
+// ══════════════════════════════════════════════════════════════════════════════
+
+type TecnicaKey = keyof AugTecnicas
+
+const TECNICA_META: { key: TecnicaKey; label: string; recomendado?: boolean }[] = [
+  { key: 'ruido_gaussiano',   label: 'Ruido gaussiano',    recomendado: true },
+  { key: 'cambio_velocidad',  label: 'Cambio de velocidad', recomendado: true },
+  { key: 'cambio_tono',       label: 'Cambio de tono',      recomendado: true },
+  { key: 'reduccion_volumen', label: 'Reducción de volumen', recomendado: true },
+  { key: 'recorte_tiempo',    label: 'Recorte de tiempo' },
+  { key: 'eco',               label: 'Eco' },
+]
+
+function NumField({ label, value, onChange, min, max, step = 1 }: {
+  label: string; value: number; onChange: (v: number) => void
+  min: number; max: number; step?: number
+}) {
+  return (
+    <div className="aug-field">
+      <label className="aug-field-label">{label}</label>
+      <input
+        type="number" className="gl-input aug-field-input"
+        min={min} max={max} step={step}
+        value={value}
+        onChange={e => onChange(Number(e.target.value))}
+      />
+    </div>
+  )
+}
+
+function TecnicaCard({
+  tecKey, label, recomendado, tecnica, onChange,
+}: {
+  tecKey: TecnicaKey; label: string; recomendado?: boolean
+  tecnica: AugTecnicas[TecnicaKey]; onChange: (t: Partial<AugTecnicas[TecnicaKey]>) => void
+}) {
+  const { habilitado, porcentaje } = tecnica as { habilitado: boolean; porcentaje: number }
+
+  return (
+    <div className={`aug-card ${habilitado ? 'aug-card--on' : ''}`}>
+      <div className="aug-card-head">
+        <label className="aug-card-toggle">
+          <input type="checkbox" checked={habilitado}
+            onChange={e => onChange({ habilitado: e.target.checked } as Partial<AugTecnicas[TecnicaKey]>)} />
+          <span className="aug-card-label">{label}</span>
+          {recomendado && <span className="aug-rec-badge"><Star size={9} /> Rec.</span>}
+        </label>
+      </div>
+
+      {habilitado && (
+        <div className="aug-card-body">
+          <NumField label="% muestras" value={porcentaje} min={1} max={100}
+            onChange={v => onChange({ porcentaje: v } as Partial<AugTecnicas[TecnicaKey]>)} />
+
+          {tecKey === 'ruido_gaussiano' && (
+            <NumField label="Intensidad" value={(tecnica as AugTecnicas['ruido_gaussiano']).intensidad}
+              min={0.001} max={0.05} step={0.001}
+              onChange={v => onChange({ intensidad: v } as Partial<AugTecnicas[TecnicaKey]>)} />
+          )}
+          {(tecKey === 'cambio_velocidad' || tecKey === 'reduccion_volumen') && (
+            <>
+              <NumField label="Factor mín"
+                value={(tecnica as AugTecnicas['cambio_velocidad']).factor_min}
+                min={tecKey === 'cambio_velocidad' ? 0.7 : 0.2}
+                max={tecKey === 'cambio_velocidad' ? 1.0 : 0.8}
+                step={0.05}
+                onChange={v => onChange({ factor_min: v } as Partial<AugTecnicas[TecnicaKey]>)} />
+              <NumField label="Factor máx"
+                value={(tecnica as AugTecnicas['cambio_velocidad']).factor_max}
+                min={tecKey === 'cambio_velocidad' ? 1.0 : 0.6}
+                max={tecKey === 'cambio_velocidad' ? 1.3 : 1.0}
+                step={0.05}
+                onChange={v => onChange({ factor_max: v } as Partial<AugTecnicas[TecnicaKey]>)} />
+            </>
+          )}
+          {tecKey === 'cambio_tono' && (
+            <>
+              <NumField label="Semitonos mín"
+                value={(tecnica as AugTecnicas['cambio_tono']).semitonos_min}
+                min={-6} max={0}
+                onChange={v => onChange({ semitonos_min: v } as Partial<AugTecnicas[TecnicaKey]>)} />
+              <NumField label="Semitonos máx"
+                value={(tecnica as AugTecnicas['cambio_tono']).semitonos_max}
+                min={0} max={6}
+                onChange={v => onChange({ semitonos_max: v } as Partial<AugTecnicas[TecnicaKey]>)} />
+            </>
+          )}
+          {tecKey === 'recorte_tiempo' && (
+            <NumField label="Max % clip"
+              value={(tecnica as AugTecnicas['recorte_tiempo']).max_porcentaje_clip}
+              min={5} max={30}
+              onChange={v => onChange({ max_porcentaje_clip: v } as Partial<AugTecnicas[TecnicaKey]>)} />
+          )}
+          {tecKey === 'eco' && (
+            <>
+              <NumField label="Delay (ms)"
+                value={(tecnica as AugTecnicas['eco']).delay_ms}
+                min={10} max={200}
+                onChange={v => onChange({ delay_ms: v } as Partial<AugTecnicas[TecnicaKey]>)} />
+              <NumField label="Decay"
+                value={(tecnica as AugTecnicas['eco']).decay}
+                min={0.05} max={0.5} step={0.05}
+                onChange={v => onChange({ decay: v } as Partial<AugTecnicas[TecnicaKey]>)} />
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AugmentationPanel({
+  aug, onChange,
+}: { aug: AugConfig; onChange: (a: AugConfig) => void }) {
+  const [open, setOpen] = useState(false)
+  const activasCount = Object.values(aug.tecnicas).filter(t => t.habilitado).length
+
+  const setTecnica = (key: TecnicaKey, partial: Partial<AugTecnicas[TecnicaKey]>) => {
+    onChange({
+      ...aug,
+      tecnicas: {
+        ...aug.tecnicas,
+        [key]: { ...aug.tecnicas[key], ...partial },
+      },
+    })
+  }
+
+  return (
+    <div className="aug-panel">
+      <button
+        type="button"
+        className="aug-header"
+        onClick={() => setOpen(p => !p)}
+        aria-expanded={open}
+      >
+        <span className="aug-header-left">
+          <Wand2 size={14} />
+          <span>Data Augmentation</span>
+          {aug.habilitado && activasCount > 0 && (
+            <span className="aug-count-badge">{activasCount} técnica{activasCount !== 1 ? 's' : ''}</span>
+          )}
+          {!aug.habilitado && <span className="aug-off-badge">desactivado</span>}
+        </span>
+        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+      </button>
+
+      {open && (
+        <div className="aug-body">
+          <label className="aug-global-toggle">
+            <input
+              type="checkbox"
+              checked={aug.habilitado}
+              onChange={e => onChange({ ...aug, habilitado: e.target.checked })}
+            />
+            <span>Habilitar augmentation para este experimento</span>
+          </label>
+
+          {aug.habilitado && (
+            <>
+              <p className="ent-hint" style={{ marginBottom: 8 }}>
+                Aplica transformaciones aleatorias al audio <strong>antes</strong> del entrenamiento.
+                Útil con datasets pequeños (&lt; 200 muestras).
+              </p>
+              <div className="aug-grid">
+                {TECNICA_META.map(({ key, label, recomendado }) => (
+                  <TecnicaCard
+                    key={key} tecKey={key} label={label} recomendado={recomendado}
+                    tecnica={aug.tecnicas[key]}
+                    onChange={partial => setTecnica(key, partial)}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AugmentationDetailBlock({ aug }: { aug: AugConfig }) {
+  const activas = (Object.entries(aug.tecnicas) as [TecnicaKey, AugTecnicas[TecnicaKey]][])
+    .filter(([, t]) => t.habilitado)
+
+  if (!aug.habilitado) {
+    return (
+      <div className="aug-detail-block">
+        <span className="aug-detail-title"><Wand2 size={12} /> Data Augmentation</span>
+        <span className="aug-off-badge">desactivado</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="aug-detail-block aug-detail-block--on">
+      <div className="aug-detail-head">
+        <span className="aug-detail-title"><Wand2 size={12} /> Data Augmentation</span>
+        <span className="aug-count-badge">{activas.length} técnica{activas.length !== 1 ? 's' : ''} activa{activas.length !== 1 ? 's' : ''}</span>
+      </div>
+      {activas.length > 0 && (
+        <div className="aug-detail-tecnicas">
+          {activas.map(([key, t]) => {
+            const meta = TECNICA_META.find(m => m.key === key)
+            const params = Object.entries(t)
+              .filter(([k]) => k !== 'habilitado')
+              .map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`)
+              .join(' · ')
+            return (
+              <div key={key} className="aug-detail-tecnica">
+                <CheckCircle2 size={11} />
+                <span className="aug-detail-tname">{meta?.label ?? key}</span>
+                <span className="aug-detail-params">{params}</span>
+              </div>
+            )
+          })}
+        </div>
       )}
     </div>
   )
@@ -563,6 +859,7 @@ function EntrenarTab({
     gradient_accumulation_steps: 2, learning_rate: 1e-5,
     warmup_steps: 100, use_peft: false, whisper_language: 'es',
   })
+  const [aug, setAug]             = useState<AugConfig>(DEFAULT_AUG)
   const [submitting, setSubmitting] = useState(false)
   const [submitErr, setSubmitErr]   = useState('')
 
@@ -645,7 +942,7 @@ function EntrenarTab({
         : { sesiones: selSesiones.map(s => ({ comunidad: s.comunidad, jornada: s.jornada })) }
       const data = await apiFetch('/entrenamiento/entrenar/', {
         method: 'POST',
-        body: JSON.stringify({ ...base, ...dataPayload }),
+        body: JSON.stringify({ ...base, ...dataPayload, augmentation: aug }),
       })
       onStarted(data.experimento_id)
     } catch (e) { setSubmitErr(apiErr(e, 'Error al lanzar el entrenamiento.')) }
@@ -827,6 +1124,9 @@ function EntrenarTab({
           )}
         </div>
 
+        {/* Augmentation */}
+        <AugmentationPanel aug={aug} onChange={setAug} />
+
         {submitErr && <div className="tc-api-error"><AlertTriangle size={14} /><span>{submitErr}</span></div>}
 
         <div className="ent-form-actions">
@@ -846,7 +1146,7 @@ function EntrenarTab({
 // Monitor — HU-21
 // ══════════════════════════════════════════════════════════════════════════════
 
-function Monitor({ id, onActivated }: { id: string; onActivated: () => void }) {
+function Monitor({ id, onActivated, canActivate = true }: { id: string; onActivated: () => void; canActivate?: boolean }) {
   const [estado, setEstado]     = useState<ExperimentoEstado | null>(null)
   const [activErr, setActivErr] = useState('')
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -922,7 +1222,7 @@ function Monitor({ id, onActivated }: { id: string; onActivated: () => void }) {
                 target="_blank" rel="noreferrer">{estado.mlflow_run_id.slice(0, 12)}…</a>
             </p>
           )}
-          {!estado.is_active && (
+          {canActivate && !estado.is_active && (
             <button className="ent-btn ent-btn--primary" onClick={activar} type="button">
               <Zap size={13} /> Activar este modelo
             </button>
@@ -945,7 +1245,7 @@ function Monitor({ id, onActivated }: { id: string; onActivated: () => void }) {
 // ExperimentosTab — HU-22 + HU-23 + HU-24
 // ══════════════════════════════════════════════════════════════════════════════
 
-function ExperimentosTab({ monitorId, onClearMonitor }: { monitorId: string | null; onClearMonitor: () => void }) {
+function ExperimentosTab({ monitorId, onClearMonitor, canManage }: { monitorId: string | null; onClearMonitor: () => void; canManage: boolean }) {
   const [exps, setExps]           = useState<Experimento[]>([])
   const [loading, setLoading]     = useState(true)
   const [filterEstado, setFilter] = useState('')
@@ -984,7 +1284,7 @@ function ExperimentosTab({ monitorId, onClearMonitor }: { monitorId: string | nu
             <span className="ent-subsection-title"><Activity size={13} /> Monitoreo en curso</span>
             <button className="ent-btn ent-btn--ghost ent-btn--sm" onClick={onClearMonitor} type="button">Ocultar</button>
           </div>
-          <Monitor id={monitorId} onActivated={load} />
+          <Monitor id={monitorId} onActivated={load} canActivate={canManage} />
         </div>
       )}
 
@@ -1031,7 +1331,7 @@ function ExperimentosTab({ monitorId, onClearMonitor }: { monitorId: string | nu
                     <td><EstadoBadge estado={exp.estado} isActive={exp.is_active} /></td>
                     <td>{new Date(exp.created_at).toLocaleDateString('es-CO')}</td>
                     <td>
-                      {exp.estado === 'completado' && !exp.is_active && (
+                      {canManage && exp.estado === 'completado' && !exp.is_active && (
                         <button className="ent-btn ent-btn--sm ent-btn--primary" onClick={() => activar(exp.id)} type="button">
                           <Zap size={11} /> Activar
                         </button>
@@ -1052,13 +1352,20 @@ function ExperimentosTab({ monitorId, onClearMonitor }: { monitorId: string | nu
                           <div className="ent-detail-grid">
                             <div><p className="ent-detail-key">Datos usados</p><p className="ent-detail-val">{formatComunidades(exp.comunidades_usadas)}</p></div>
                             <div><p className="ent-detail-key">Train / Eval</p><p className="ent-detail-val">{detail.num_muestras_train} / {detail.num_muestras_eval}</p></div>
-                            {detail.config_entrenamiento && Object.entries(detail.config_entrenamiento).map(([k, v]) => (
-                              <div key={k}>
-                                <p className="ent-detail-key">{k.replace(/_/g, ' ')}</p>
-                                <p className="ent-detail-val">{String(v)}</p>
-                              </div>
-                            ))}
+                            {detail.config_entrenamiento && Object.entries(detail.config_entrenamiento).map(([k, v]) => {
+                              if (k === 'augmentation') return null
+                              return (
+                                <div key={k}>
+                                  <p className="ent-detail-key">{k.replace(/_/g, ' ')}</p>
+                                  <p className="ent-detail-val">{String(v)}</p>
+                                </div>
+                              )
+                            })}
                           </div>
+                          {/* Augmentation detail — HU-AUG-04 */}
+                          {!!detail.config_entrenamiento?.augmentation && (
+                            <AugmentationDetailBlock aug={detail.config_entrenamiento.augmentation as AugConfig} />
+                          )}
                           {Object.keys(detail.metricas ?? {}).length > 0 && (
                             <div className="ent-metrics-grid" style={{ marginTop: 12 }}>
                               {Object.entries(detail.metricas).map(([k, v]) => (
@@ -1081,7 +1388,7 @@ function ExperimentosTab({ monitorId, onClearMonitor }: { monitorId: string | nu
                           )}
                           {detail.error_mensaje && <p className="ent-err-sm" style={{ marginTop: 8 }}>{detail.error_mensaje}</p>}
                           {(exp.estado === 'entrenando' || exp.estado === 'pendiente') && (
-                            <div style={{ marginTop: 12 }}><Monitor id={exp.id} onActivated={load} /></div>
+                            <div style={{ marginTop: 12 }}><Monitor id={exp.id} onActivated={load} canActivate={canManage} /></div>
                           )}
                         </div>
                       )}
@@ -1278,8 +1585,13 @@ function TranscribirTab() {
     fd.append('audio', rec.audioFile)
     if (pipeline) fd.append('direccion', 'lengua_a_es')
     try {
-      const ep = pipeline ? '/entrenamiento/transcribir-y-traducir/' : '/entrenamiento/transcribir/'
-      const res = await fetch(`${API}${ep}`, { method: 'POST', body: fd })
+      const ep    = pipeline ? '/entrenamiento/transcribir-y-traducir/' : '/entrenamiento/transcribir/'
+      const token = getToken()
+      const res   = await fetch(`${API_BASE}${ep}`, {
+        method: 'POST',
+        headers: { Accept: 'application/json', ...(token ? { Authorization: `Token ${token}` } : {}) },
+        body: fd,
+      })
       const data: TranscripcionResult = await res.json()
       if (res.ok) {
         setResult(data)
@@ -1443,7 +1755,12 @@ function SubirTab() {
     fd.append('audio',        rec.audioFile!)
     fd.append('transcripcion', transcripcion.trim())
     try {
-      const res  = await fetch(`${API}/entrenamiento/dataset/subir/`, { method: 'POST', body: fd })
+      const token = getToken()
+      const res  = await fetch(`${API_BASE}/entrenamiento/dataset/subir/`, {
+        method: 'POST',
+        headers: { Accept: 'application/json', ...(token ? { Authorization: `Token ${token}` } : {}) },
+        body: fd,
+      })
       const data = await res.json()
       if (res.ok) {
         setResult(data)
@@ -1581,28 +1898,29 @@ function SubirTab() {
 // Page
 // ══════════════════════════════════════════════════════════════════════════════
 
-const TABS: { id: Tab; label: string; Icon: LucideIcon }[] = [
-  { id: 'datos',        label: 'Datos',        Icon: Database   },
-  { id: 'modelos',      label: 'Modelos',      Icon: Cpu        },
-  { id: 'entrenar',     label: 'Entrenar',     Icon: Play       },
-  { id: 'experimentos', label: 'Experimentos', Icon: BarChart2  },
-  { id: 'transcribir',  label: 'Transcribir',  Icon: Mic        },
-  { id: 'subir',        label: 'Subir datos',  Icon: FolderPlus },
+const ALL_TABS: { id: Tab; label: string; Icon: LucideIcon; minRole: 'all' | 'canUpload' | 'canManage' }[] = [
+  { id: 'datos',        label: 'Datos',        Icon: Database,  minRole: 'all'       },
+  { id: 'modelos',      label: 'Modelos',      Icon: Cpu,       minRole: 'all'       },
+  { id: 'entrenar',     label: 'Entrenar',     Icon: Play,      minRole: 'canManage' },
+  { id: 'experimentos', label: 'Experimentos', Icon: BarChart2, minRole: 'all'       },
+  { id: 'transcribir',  label: 'Transcribir',  Icon: Mic,       minRole: 'all'       },
+  { id: 'subir',        label: 'Subir datos',  Icon: FolderPlus,minRole: 'canUpload' },
 ]
 
 export default function Entrenamiento() {
-  const [auth, setAuth]             = useState(() => sessionStorage.getItem(SESS_KEY) === '1')
+  const { canManage, canUpload } = useAuth()
   const [tab, setTab]               = useState<Tab>('datos')
   const [selSesiones, setSelSesiones] = useState<SesionKey[]>([])
   const [monitorId, setMonitorId]   = useState<string | null>(null)
 
-  if (!auth) return (
-    <div className="translator-page">
-      <div className="translator-page-inner">
-        <PasswordGate onAuth={() => setAuth(true)} />
-      </div>
-    </div>
+  const visibleTabs = ALL_TABS.filter(t =>
+    t.minRole === 'all' ||
+    (t.minRole === 'canUpload' && canUpload) ||
+    (t.minRole === 'canManage' && canManage)
   )
+
+  // reset to a visible tab if current one becomes hidden
+  const activeTab = visibleTabs.find(t => t.id === tab) ? tab : (visibleTabs[0]?.id ?? 'datos')
 
   return (
     <div className="gl-page">
@@ -1615,9 +1933,9 @@ export default function Entrenamiento() {
       </div>
 
       <div className="gl-tabs-bar">
-        {TABS.map(({ id, label, Icon }) => (
+        {visibleTabs.map(({ id, label, Icon }) => (
           <button key={id} type="button"
-            className={`gl-tab${tab === id ? ' gl-tab-active' : ''}`}
+            className={`gl-tab${activeTab === id ? ' gl-tab-active' : ''}`}
             onClick={() => setTab(id)}>
             <Icon size={13} />
             {label}
@@ -1627,19 +1945,19 @@ export default function Entrenamiento() {
       </div>
 
       <div className="ent-tab-content">
-        {tab === 'datos' && <DatosTab onSelectSesiones={setSelSesiones} />}
-        {tab === 'modelos' && <ModelosTab />}
-        {tab === 'entrenar' && (
+        {activeTab === 'datos' && <DatosTab onSelectSesiones={setSelSesiones} canManage={canManage} />}
+        {activeTab === 'modelos' && <ModelosTab canManage={canManage} />}
+        {activeTab === 'entrenar' && canManage && (
           <EntrenarTab
             preselectedSesiones={selSesiones}
             onStarted={id => { setMonitorId(id); setTab('experimentos') }}
           />
         )}
-        {tab === 'experimentos' && (
-          <ExperimentosTab monitorId={monitorId} onClearMonitor={() => setMonitorId(null)} />
+        {activeTab === 'experimentos' && (
+          <ExperimentosTab monitorId={monitorId} onClearMonitor={() => setMonitorId(null)} canManage={canManage} />
         )}
-        {tab === 'transcribir' && <TranscribirTab />}
-        {tab === 'subir'       && <SubirTab />}
+        {activeTab === 'transcribir' && <TranscribirTab />}
+        {activeTab === 'subir' && canUpload && <SubirTab />}
       </div>
     </div>
   )
