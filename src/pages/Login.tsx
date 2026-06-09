@@ -1,12 +1,12 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
-import { Loader2, AlertCircle, LogIn } from 'lucide-react'
+import { useNavigate, useLocation, Navigate, Link } from 'react-router-dom'
+import { Loader2, AlertCircle, LogIn, ArrowLeft } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 const CDN = 'https://cdn.unimagdalena.edu.co/images'
 
 export default function Login() {
-  const { login } = useAuth()
+  const { login, isAuthenticated } = useAuth()
   const navigate  = useNavigate()
   const location  = useLocation()
   const from      = (location.state as { from?: string })?.from ?? '/'
@@ -15,6 +15,9 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
+
+  // Si ya está autenticado no necesita estar aquí — DEBE ir después de todos los hooks
+  if (isAuthenticated) return <Navigate to={from === '/login' ? '/' : from} replace />
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -44,6 +47,8 @@ export default function Login() {
           <a href="https://www.unimagdalena.edu.co" target="_blank" rel="noreferrer" aria-label="Universidad del Magdalena">
             <img src={`${CDN}/escudo/bg_dark/128.png`} alt="Universidad del Magdalena" className="login-logo-uni" width="52" height="52" />
           </a>
+          <div className="login-divider" aria-hidden="true" />
+          <img src="/gideam.png" alt="GIDEAM" className="login-logo-gideam" />
           <div className="login-divider" aria-hidden="true" />
           <img src="/SAYTA LOGO.jpg" alt="SAYTA" className="login-logo-sayta" width="46" height="46" />
           <div className="login-brand-text">
@@ -102,6 +107,10 @@ export default function Login() {
               : <><LogIn size={16} /> Entrar</>}
           </button>
         </form>
+
+        <Link to="/" className="login-back-link">
+          <ArrowLeft size={13} /> Volver al traductor
+        </Link>
 
         <p className="login-footer-note">
           Universidad del Magdalena · GIDEAM

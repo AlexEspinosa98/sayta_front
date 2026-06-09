@@ -2594,8 +2594,19 @@ a.contact-card .contact-card-icon { background: var(--blue); color: var(--white)
   padding-bottom: 8px;
   border-bottom: 1px solid var(--gray-200);
 }
-.login-logo-uni { height: 52px; width: auto; }
-.login-logo-sayta { height: 46px; width: auto; border-radius: 8px; }
+.login-logo-uni   { height: 52px; width: auto; }
+.login-logo-gideam { height: 46px; width: auto; object-fit: contain; }
+.login-logo-sayta  { height: 46px; width: auto; border-radius: 8px; }
+
+.login-back-link {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  color: var(--blue); font-size: .82rem; font-weight: 600;
+  text-decoration: none;
+  padding: 8px 0;
+  border-top: 1px solid var(--gray-100);
+  transition: opacity .15s;
+}
+.login-back-link:hover { opacity: .7; }
 .login-divider  { width: 1px; height: 36px; background: var(--gray-200); flex-shrink: 0; }
 .login-brand-text { display: flex; flex-direction: column; gap: 2px; }
 .login-brand-name { font-size: 1rem; font-weight: 800; color: var(--blue); letter-spacing: .05em; }
