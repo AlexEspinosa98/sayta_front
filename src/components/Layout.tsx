@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { BookOpen, Home, Library, Activity, Tag, Unlock } from 'lucide-react'
+import { BookOpen, Home, Library, Activity, Tag, Unlock, Languages } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 const CDN = 'https://cdn.unimagdalena.edu.co/images'
@@ -48,11 +48,16 @@ export default function Layout() {
             <ul className="nav" role="list">
               <li>
                 <NavLink to="/" end className={({ isActive }) => `nav-link${isActive ? ' nav-link-active' : ''}`}>
-                  <Home size={15} aria-hidden="true" /><span>Traductor</span>
+                  <Home size={15} aria-hidden="true" /><span>Inicio</span>
                 </NavLink>
               </li>
               {isUnlocked && (
                 <>
+                  <li>
+                    <NavLink to="/traductor" className={({ isActive }) => `nav-link${isActive ? ' nav-link-active' : ''}`}>
+                      <Languages size={15} aria-hidden="true" /><span>Traductor</span>
+                    </NavLink>
+                  </li>
                   <li>
                     <NavLink to="/glosario" className={({ isActive }) => `nav-link${isActive ? ' nav-link-active' : ''}`}>
                       <Library size={15} aria-hidden="true" /><span>Glosario</span>

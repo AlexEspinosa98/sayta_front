@@ -5,6 +5,7 @@ import RequireAuth from './components/RequireAuth'
 import Layout from './components/Layout'
 import Home from './pages/Home'
 import About from './pages/About'
+import Traductor from './pages/Traductor'
 import Etiquetado from './pages/Etiquetado'
 import Glosario from './pages/Glosario'
 import Entrenamiento from './pages/Entrenamiento'
@@ -20,6 +21,7 @@ export default function App() {
 
           {/* Rutas protegidas — requieren contraseña */}
           <Route element={<RequireAuth />}>
+            <Route path="/traductor"     element={<Traductor />} />
             <Route path="/glosario"      element={<Glosario />} />
             <Route path="/entrenamiento" element={<Entrenamiento />} />
             <Route path="/etiquetado"    element={<Etiquetado />} />
