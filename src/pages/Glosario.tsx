@@ -4,8 +4,7 @@ import {
   Loader2, CheckCircle2, AlertCircle,
   Zap, BookOpen, Globe, Cpu, RotateCcw, FileJson,
 } from 'lucide-react'
-import { apiFetch, API_BASE, getToken } from '../api'
-import { useAuth } from '../context/AuthContext'
+import { apiFetch, API_BASE } from '../api'
 
 import {
   useSpecialKeyboard, SpecialKeyboardPanel, SpecialKeyboardToggle,
@@ -669,13 +668,11 @@ function BulkModal({ lenguaId, onClose }: { lenguaId: string; onClose: () => voi
         fd.append('archivo', file)
         fd.append('lengua_id', lenguaId)
         fd.append('modo', mode)
-        const token = getToken()
         const res = await fetch(`${API_BASE}/terminos/terminos/carga-masiva/`, {
           method: 'POST',
-          headers: { Accept: 'application/json', Authorization: `Token ${token ?? ''}` },
+          headers: { Accept: 'application/json' },
           body: fd,
         })
-        if (res.status === 401) { window.location.href = '/login'; return }
         data = await res.json() as Record<string, unknown>
       } else {
         let parsed
@@ -933,7 +930,7 @@ function ConfirmModal({ title, message, danger, saving, onConfirm, onClose }: {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function Glosario() {
-  const { canManage } = useAuth()
+  const canManage = true
   const [activeTab, setActiveTab] = useState<Tab>('lenguas')
   const [lenguas, setLenguas]     = useState<Lengua[]>([])
   const [loadingL, setLoadingL]   = useState(true)

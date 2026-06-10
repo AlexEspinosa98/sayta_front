@@ -2888,3 +2888,74 @@ a.contact-card .contact-card-icon { background: var(--blue); color: var(--white)
   font-size: .82rem; color: var(--red);
   margin: 0; padding: 4px 0;
 }
+
+/* ── Header lock button ────────────────────────────────────────────────────── */
+.header-lock-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 12px;
+  border: 1.5px solid rgba(255,255,255,.35);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--white);
+  font-size: .82rem; font-weight: 500; cursor: pointer;
+  transition: background .15s, border-color .15s;
+  white-space: nowrap;
+}
+.header-lock-btn:hover {
+  background: rgba(255,255,255,.12);
+  border-color: rgba(255,255,255,.6);
+}
+
+/* ── Password gate modal ───────────────────────────────────────────────────── */
+.gate-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.55);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 9999;
+  animation: fadeIn .15s ease;
+}
+@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+
+.gate-card {
+  background: var(--white);
+  border-radius: var(--r);
+  box-shadow: 0 8px 32px rgba(0,0,0,.22);
+  padding: 32px 28px 24px;
+  width: 100%; max-width: 360px;
+  animation: slideUp .18s ease;
+}
+@keyframes slideUp { from { transform: translateY(16px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
+
+.gate-title {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 1.1rem; font-weight: 700;
+  color: var(--blue); margin: 0 0 6px;
+}
+.gate-sub {
+  font-size: .87rem; color: var(--gray-500);
+  margin: 0 0 20px;
+}
+
+.gate-field {
+  position: relative; margin-bottom: 10px;
+}
+.gate-field .gl-input {
+  width: 100%; padding-right: 38px; box-sizing: border-box;
+}
+.gate-eye {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; cursor: pointer;
+  color: var(--gray-400); padding: 4px; line-height: 0;
+}
+.gate-eye:hover { color: var(--blue); }
+
+.gate-error {
+  display: flex; align-items: center; gap: 5px;
+  font-size: .82rem; color: var(--red);
+  margin: 0 0 12px;
+}
+
+.gate-actions {
+  display: flex; justify-content: flex-end; gap: 10px;
+  margin-top: 20px;
+}

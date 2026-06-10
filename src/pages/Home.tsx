@@ -2,14 +2,14 @@ import { useState, useRef, useId, useEffect } from 'react'
 import {
   Mic, MicOff, Upload, Languages,
   Loader2, Volume2, Copy, Check, AlertCircle,
-  ArrowRight, ArrowLeft, ArrowRightLeft, Star, XCircle, LogIn,
+  ArrowRight, ArrowLeft, ArrowRightLeft, Star, XCircle,
+  Lock, Eye, EyeOff,
 } from 'lucide-react'
 import {
   useSpecialKeyboard, SpecialKeyboardPanel, SpecialKeyboardToggle,
 } from '../components/SpecialKeyboard'
-import { Link } from 'react-router-dom'
 import { useAudioRecorder } from '../hooks/useAudioRecorder'
-import { API_BASE, getToken } from '../api'
+import { API_BASE } from '../api'
 import { useAuth } from '../context/AuthContext'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -74,7 +74,13 @@ function ProbBadge({ prob }: { prob: number }) {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function Home() {
-  const { isAuthenticated } = useAuth()
+  const { isUnlocked, unlock } = useAuth()
+
+  // Gate de contraseña
+  const [showGate, setShowGate]         = useState(false)
+  const [gateInput, setGateInput]       = useState('')
+  const [gateError, setGateError]       = useState(false)
+  const [showPw, setShowPw]             = useState(false)
 
   // Lenguas
   const [lenguas, setLenguas]           = useState<Lengua[]>([])
@@ -105,9 +111,8 @@ export default function Home() {
   const kb = useSpecialKeyboard(textareaRef, inputText, setInputText)
 
   useEffect(() => {
-    const token = getToken()
     fetch(`${API_BASE}/terminos/lenguas/?page_size=50`, {
-      headers: { Accept: 'application/json', ...(token ? { Authorization: `Token ${token}` } : {}) },
+      headers: { Accept: 'application/json' },
     })
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
       .then(d => {
@@ -141,14 +146,9 @@ export default function Home() {
     try {
       if (inputMode === 'text') {
         // Texto → POST /api/traduccion/traducir/
-        const token = getToken()
         const res = await fetch(`${API_BASE}/traduccion/traducir/`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-            ...(token ? { Authorization: `Token ${token}` } : {}),
-          },
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
           body: JSON.stringify({ texto: inputText.trim(), lengua_id: lenguaId, direccion }),
         })
         if (res.status === 401) { setApiError('Inicia sesión para usar el traductor.'); return }
@@ -168,13 +168,11 @@ export default function Home() {
         fd.append('lengua_id', String(lenguaId))
         fd.append('audio', rec.audioFile!)
         fd.append('direccion', 'lengua_a_es')
-        const token = getToken()
         const res = await fetch(`${API_BASE}/entrenamiento/transcribir-y-traducir/`, {
           method: 'POST',
-          headers: { Accept: 'application/json', ...(token ? { Authorization: `Token ${token}` } : {}) },
+          headers: { Accept: 'application/json' },
           body: fd,
         })
-        if (res.status === 401) { setApiError('Inicia sesión para usar la transcripción de audio.'); return }
         const data: TranscripcionResponse = await res.json()
         if (!res.ok || data.error) {
           setApiError(data.error ?? `Error ${res.status}`)
@@ -233,11 +231,11 @@ export default function Home() {
           </h1>
           <p className="tp-subtitle">Búsqueda semántica por embeddings · lenguas indígenas colombianas</p>
 
-          {!isAuthenticated && (
-            <Link to="/login" className="tp-login-cta">
-              <LogIn size={15} aria-hidden="true" />
-              Iniciar sesión para acceder a Glosario y Entrenamiento
-            </Link>
+          {!isUnlocked && (
+            <button type="button" className="tp-login-cta" onClick={() => { setShowGate(true); setGateInput(''); setGateError(false) }}>
+              <Lock size={15} aria-hidden="true" />
+              Acceder a Glosario, Entrenamiento y Etiquetado
+            </button>
           )}
         </header>
 
@@ -531,6 +529,44 @@ export default function Home() {
 
         </div>
       </div>
+
+      {/* ── Modal contraseña ─────────────────────────────────── */}
+      {showGate && (
+        <div className="gate-overlay" role="dialog" aria-modal="true" aria-label="Acceso al sistema">
+          <div className="gate-card">
+            <h2 className="gate-title"><Lock size={16} /> Acceso al sistema</h2>
+            <p className="gate-sub">Ingresa la contraseña para acceder a Glosario, Entrenamiento y Etiquetado.</p>
+            <div className="gate-field">
+              <input
+                type={showPw ? 'text' : 'password'}
+                className="gl-input"
+                placeholder="Contraseña"
+                value={gateInput}
+                autoFocus
+                onChange={e => { setGateInput(e.target.value); setGateError(false) }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    if (unlock(gateInput)) setShowGate(false)
+                    else setGateError(true)
+                  }
+                  if (e.key === 'Escape') setShowGate(false)
+                }}
+              />
+              <button type="button" className="gate-eye" onClick={() => setShowPw(p => !p)} tabIndex={-1}>
+                {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
+            {gateError && <p className="gate-error"><AlertCircle size={13} /> Contraseña incorrecta.</p>}
+            <div className="gate-actions">
+              <button type="button" className="ent-btn ent-btn--secondary" onClick={() => setShowGate(false)}>Cancelar</button>
+              <button type="button" className="ent-btn ent-btn--primary" onClick={() => {
+                if (unlock(gateInput)) setShowGate(false)
+                else setGateError(true)
+              }}>Entrar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   )
 }

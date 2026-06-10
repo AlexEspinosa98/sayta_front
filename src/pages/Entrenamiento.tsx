@@ -7,8 +7,7 @@ import {
   Wand2,
   type LucideIcon,
 } from 'lucide-react'
-import { apiFetch as sharedFetch, API_BASE, getToken } from '../api'
-import { useAuth } from '../context/AuthContext'
+import { apiFetch as sharedFetch, API_BASE } from '../api'
 import { useAudioRecorder } from '../hooks/useAudioRecorder'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -1495,13 +1494,11 @@ function TranscribirTab() {
     if (pipeline) fd.append('direccion', 'lengua_a_es')
     try {
       const ep    = pipeline ? '/entrenamiento/transcribir-y-traducir/' : '/entrenamiento/transcribir/'
-      const token = getToken()
       const res   = await fetch(`${API_BASE}${ep}`, {
         method: 'POST',
-        headers: { Accept: 'application/json', Authorization: `Token ${token ?? ''}` },
+        headers: { Accept: 'application/json' },
         body: fd,
       })
-      if (res.status === 401) { window.location.href = '/login'; return }
       const data: TranscripcionResult = await res.json()
       if (res.ok) {
         setResult(data)
@@ -1665,13 +1662,11 @@ function SubirTab() {
     fd.append('audio',        rec.audioFile!)
     fd.append('transcripcion', transcripcion.trim())
     try {
-      const token = getToken()
       const res  = await fetch(`${API_BASE}/entrenamiento/dataset/subir/`, {
         method: 'POST',
-        headers: { Accept: 'application/json', Authorization: `Token ${token ?? ''}` },
+        headers: { Accept: 'application/json' },
         body: fd,
       })
-      if (res.status === 401) { window.location.href = '/login'; return }
       const data = await res.json()
       if (res.ok) {
         setResult(data)
@@ -1819,19 +1814,9 @@ const ALL_TABS: { id: Tab; label: string; Icon: LucideIcon; minRole: 'all' | 'ca
 ]
 
 export default function Entrenamiento() {
-  const { canManage, canUpload } = useAuth()
   const [tab, setTab]               = useState<Tab>('datos')
   const [selSesiones, setSelSesiones] = useState<SesionKey[]>([])
   const [monitorId, setMonitorId]   = useState<string | null>(null)
-
-  const visibleTabs = ALL_TABS.filter(t =>
-    t.minRole === 'all' ||
-    (t.minRole === 'canUpload' && canUpload) ||
-    (t.minRole === 'canManage' && canManage)
-  )
-
-  // reset to a visible tab if current one becomes hidden
-  const activeTab = visibleTabs.find(t => t.id === tab) ? tab : (visibleTabs[0]?.id ?? 'datos')
 
   return (
     <div className="gl-page">
@@ -1844,9 +1829,9 @@ export default function Entrenamiento() {
       </div>
 
       <div className="gl-tabs-bar">
-        {visibleTabs.map(({ id, label, Icon }) => (
+        {ALL_TABS.map(({ id, label, Icon }) => (
           <button key={id} type="button"
-            className={`gl-tab${activeTab === id ? ' gl-tab-active' : ''}`}
+            className={`gl-tab${tab === id ? ' gl-tab-active' : ''}`}
             onClick={() => setTab(id)}>
             <Icon size={13} />
             {label}
@@ -1856,19 +1841,19 @@ export default function Entrenamiento() {
       </div>
 
       <div className="ent-tab-content">
-        {activeTab === 'datos' && <DatosTab onSelectSesiones={setSelSesiones} canManage={canManage} />}
-        {activeTab === 'modelos' && <ModelosTab canManage={canManage} />}
-        {activeTab === 'entrenar' && canManage && (
+        {tab === 'datos' && <DatosTab onSelectSesiones={setSelSesiones} canManage={true} />}
+        {tab === 'modelos' && <ModelosTab canManage={true} />}
+        {tab === 'entrenar' && (
           <EntrenarTab
             preselectedSesiones={selSesiones}
             onStarted={id => { setMonitorId(id); setTab('experimentos') }}
           />
         )}
-        {activeTab === 'experimentos' && (
-          <ExperimentosTab monitorId={monitorId} onClearMonitor={() => setMonitorId(null)} canManage={canManage} />
+        {tab === 'experimentos' && (
+          <ExperimentosTab monitorId={monitorId} onClearMonitor={() => setMonitorId(null)} canManage={true} />
         )}
-        {activeTab === 'transcribir' && <TranscribirTab />}
-        {activeTab === 'subir' && canUpload && <SubirTab />}
+        {tab === 'transcribir' && <TranscribirTab />}
+        {tab === 'subir' && <SubirTab />}
       </div>
     </div>
   )

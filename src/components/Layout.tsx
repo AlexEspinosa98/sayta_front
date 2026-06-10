@@ -1,17 +1,11 @@
-import { NavLink, Outlet, useNavigate, Link } from 'react-router-dom'
-import { BookOpen, Home, Library, Activity, LogOut, User, LogIn, Tag } from 'lucide-react'
+import { NavLink, Outlet } from 'react-router-dom'
+import { BookOpen, Home, Library, Activity, Tag, Unlock } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 const CDN = 'https://cdn.unimagdalena.edu.co/images'
 
 export default function Layout() {
-  const { isAuthenticated, user, logout } = useAuth()
-  const navigate = useNavigate()
-
-  const handleLogout = async () => {
-    await logout()
-    navigate('/login', { replace: true })
-  }
+  const { isUnlocked, lock } = useAuth()
 
   return (
     <div className="app">
@@ -53,80 +47,42 @@ export default function Layout() {
           <nav aria-label="Navegación principal">
             <ul className="nav" role="list">
               <li>
-                <NavLink
-                  to="/"
-                  end
-                  className={({ isActive }) => `nav-link${isActive ? ' nav-link-active' : ''}`}
-                >
-                  <Home size={15} aria-hidden="true" />
-                  <span>Traductor</span>
+                <NavLink to="/" end className={({ isActive }) => `nav-link${isActive ? ' nav-link-active' : ''}`}>
+                  <Home size={15} aria-hidden="true" /><span>Traductor</span>
                 </NavLink>
               </li>
-              {isAuthenticated && (
+              {isUnlocked && (
                 <>
                   <li>
-                    <NavLink
-                      to="/glosario"
-                      className={({ isActive }) => `nav-link${isActive ? ' nav-link-active' : ''}`}
-                    >
-                      <Library size={15} aria-hidden="true" />
-                      <span>Glosario</span>
+                    <NavLink to="/glosario" className={({ isActive }) => `nav-link${isActive ? ' nav-link-active' : ''}`}>
+                      <Library size={15} aria-hidden="true" /><span>Glosario</span>
                     </NavLink>
                   </li>
                   <li>
-                    <NavLink
-                      to="/entrenamiento"
-                      className={({ isActive }) => `nav-link${isActive ? ' nav-link-active' : ''}`}
-                    >
-                      <Activity size={15} aria-hidden="true" />
-                      <span>Entrenamiento</span>
+                    <NavLink to="/entrenamiento" className={({ isActive }) => `nav-link${isActive ? ' nav-link-active' : ''}`}>
+                      <Activity size={15} aria-hidden="true" /><span>Entrenamiento</span>
                     </NavLink>
                   </li>
                   <li>
-                    <NavLink
-                      to="/etiquetado"
-                      className={({ isActive }) => `nav-link${isActive ? ' nav-link-active' : ''}`}
-                    >
-                      <Tag size={15} aria-hidden="true" />
-                      <span>Etiquetado</span>
+                    <NavLink to="/etiquetado" className={({ isActive }) => `nav-link${isActive ? ' nav-link-active' : ''}`}>
+                      <Tag size={15} aria-hidden="true" /><span>Etiquetado</span>
                     </NavLink>
                   </li>
                 </>
               )}
               <li>
-                <NavLink
-                  to="/acerca"
-                  className={({ isActive }) => `nav-link${isActive ? ' nav-link-active' : ''}`}
-                >
-                  <BookOpen size={15} aria-hidden="true" />
-                  <span>Acerca de</span>
+                <NavLink to="/acerca" className={({ isActive }) => `nav-link${isActive ? ' nav-link-active' : ''}`}>
+                  <BookOpen size={15} aria-hidden="true" /><span>Acerca de</span>
                 </NavLink>
               </li>
             </ul>
           </nav>
 
-          {isAuthenticated && user ? (
-            <div className="header-user">
-              <div className="header-user-chip">
-                <User size={13} aria-hidden="true" />
-                <span className="header-user-name">{user.username}</span>
-                <span className="header-user-rol">{user.rol_display}</span>
-              </div>
-              <button
-                className="header-logout-btn"
-                onClick={handleLogout}
-                aria-label="Cerrar sesión"
-                title="Cerrar sesión"
-              >
-                <LogOut size={15} />
-              </button>
-            </div>
-          ) : (
-            <Link to="/login" className="header-login-btn">
-              <LogIn size={14} aria-hidden="true" />
-              <span>Iniciar sesión</span>
-            </Link>
-          )}
+          {isUnlocked ? (
+            <button className="header-lock-btn" onClick={lock} title="Bloquear acceso" aria-label="Bloquear acceso">
+              <Unlock size={15} /><span>Bloquear</span>
+            </button>
+          ) : null}
         </div>
       </header>
 
@@ -137,27 +93,9 @@ export default function Layout() {
       <footer className="footer" role="contentinfo">
         <div className="footer-inner">
           <div className="footer-logos" aria-label="Logos institucionales">
-            <img
-              src={`${CDN}/escudo/bg_dark/128.png`}
-              alt="Universidad del Magdalena"
-              className="footer-logo"
-              width="42"
-              height="42"
-            />
-            <img
-              src={`${CDN}/acreditacion/blue/128.png`}
-              alt="Acreditación de Alta Calidad"
-              className="footer-logo"
-              width="42"
-              height="42"
-            />
-            <img
-              src="/SAYTA LOGO.jpg"
-              alt="SAYTA"
-              className="footer-logo footer-logo-sayta"
-              width="42"
-              height="36"
-            />
+            <img src={`${CDN}/escudo/bg_dark/128.png`} alt="Universidad del Magdalena" className="footer-logo" width="42" height="42" />
+            <img src={`${CDN}/acreditacion/blue/128.png`} alt="Acreditación de Alta Calidad" className="footer-logo" width="42" height="42" />
+            <img src="/SAYTA LOGO.jpg" alt="SAYTA" className="footer-logo footer-logo-sayta" width="42" height="36" />
           </div>
           <p className="footer-text">
             © {new Date().getFullYear()} Universidad del Magdalena · SAYTA – Sistema de Audio y Traducción Ancestral
