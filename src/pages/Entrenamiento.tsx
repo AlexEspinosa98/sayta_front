@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
 import {
   Database, Cpu, Play, Mic, MicOff, Upload, Volume2,
   Loader2, CheckCircle2, AlertTriangle, XCircle,
   ChevronDown, ChevronRight, Download, HardDrive,
   Star, RefreshCw, BarChart2, Languages, Activity, Zap, FolderPlus,
-  Wand2,
+  Wand2, Server, Power, StopCircle,
   type LucideIcon,
 } from 'lucide-react'
 import { apiFetch as sharedFetch, API_BASE } from '../api'
@@ -89,6 +89,44 @@ interface ExperimentoEstado {
   task_info: { experimento_id: string; started_at: string; estado: string } | null
 }
 
+// ── Monitoreo de procesos (HU-MON-01..05) ──────────────────────────────────────
+
+interface GpuDevice {
+  indice: number; nombre: string; memoria_total_gb: number
+  memoria_reservada_gb: number; memoria_asignada_gb: number
+  memoria_libre_gb: number; cuda_capability: string; multiprocessors: number
+}
+
+interface SistemaInfo {
+  gpu: { disponible: boolean; torch_version: string; cuda_version: string | null; dispositivos: GpuDevice[] }
+  cpu: { nucleos_logicos: number; uso_porcentaje?: number; nucleos_fisicos?: number; modelo?: string }
+  ram: { total_gb?: number; disponible_gb?: number; usado_gb?: number; uso_porcentaje?: number; error?: string }
+  sistema_operativo: string
+  entrenamiento_en_curso: {
+    experimento_id: string; nombre: string; lengua: string; modelo: string
+    started_at: string | null; estado_hilo: string; usando_gpu: boolean; fp16_activado: boolean
+  } | null
+  advertencias: string[]
+}
+
+interface ProgresoInfo {
+  experimento_id: string; nombre: string; estado: string; fase: string
+  epoca_actual: number; epocas_totales: number | null
+  step_actual: number; steps_totales: number | null
+  porcentaje: number; loss_actual: number | null
+  ultimo_heartbeat: string | null; segundos_desde_heartbeat: number | null
+  esta_vivo: boolean | null
+}
+
+interface ProcesoItem {
+  experimento_id: string; nombre: string; lengua: string; modelo: string
+  epoca_actual: number; epocas_totales: number | null; porcentaje: number
+  ultimo_heartbeat: string | null; segundos_desde_heartbeat: number | null
+  esta_vivo: boolean; colgado: boolean; created_at: string
+}
+
+interface ProcesosResponse { total: number; umbral_segundos: number; procesos: ProcesoItem[] }
+
 interface SesionKey { comunidad: string; jornada: string }
 
 interface SubirResult {
@@ -99,7 +137,7 @@ interface SubirResult {
 }
 
 type Expand = ComunidadDetalle | 'loading' | null
-type Tab = 'datos' | 'modelos' | 'entrenar' | 'experimentos' | 'transcribir' | 'subir'
+type Tab = 'datos' | 'modelos' | 'entrenar' | 'experimentos' | 'procesos' | 'transcribir' | 'subir'
 type DataMode = 'todos' | 'comunidades' | 'sesiones'
 
 // ── Augmentation types ────────────────────────────────────────────────────────
@@ -137,6 +175,14 @@ const apiFetch = sharedFetch
 function apiErr(e: unknown, fallback = 'Error desconocido.'): string {
   const d = (e as { data?: Record<string, unknown> })?.data
   return (d?.error as string | undefined) ?? (d?.detail as string | undefined) ?? fallback
+}
+
+function isNotFound(e: unknown): boolean {
+  return (e as { status?: number } | undefined)?.status === 404
+}
+
+function NoDisponible({ children }: { children: ReactNode }) {
+  return <div className="ent-warn"><AlertTriangle size={13} /><span>{children}</span></div>
 }
 
 // ── Mini components ───────────────────────────────────────────────────────────
@@ -1149,6 +1195,8 @@ function EntrenarTab({
 function Monitor({ id, onActivated, canActivate = true }: { id: string; onActivated: () => void; canActivate?: boolean }) {
   const [estado, setEstado]     = useState<ExperimentoEstado | null>(null)
   const [activErr, setActivErr] = useState('')
+  const [progreso, setProgreso] = useState<ProgresoInfo | null>(null)
+  const [progresoUnavailable, setProgresoUnavailable] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const poll = useCallback(async () => {
@@ -1157,6 +1205,10 @@ function Monitor({ id, onActivated, canActivate = true }: { id: string; onActiva
       setEstado(d)
       if (d.estado === 'completado' || d.estado === 'fallido' || d.is_active) {
         if (intervalRef.current) clearInterval(intervalRef.current)
+      }
+      if (d.estado === 'entrenando' || d.estado === 'pendiente') {
+        try { setProgreso(await apiFetch(`/entrenamiento/experimentos/${id}/progreso/`)) }
+        catch (e) { if (isNotFound(e)) setProgresoUnavailable(true) }
       }
     } catch { /* silencio */ }
   }, [id])
@@ -1196,6 +1248,25 @@ function Monitor({ id, onActivated, canActivate = true }: { id: string; onActiva
           <div>
             <p className="ent-monitor-msg">Entrenando… actualización cada 15 s</p>
             <p className="ent-monitor-sub2">Train: {estado.num_muestras_train} · Eval: {estado.num_muestras_eval} muestras</p>
+            {progreso && (
+              <div className="ent-progreso-live">
+                <div className="ent-prog-wrap">
+                  <div className="ent-prog-bar">
+                    <div
+                      className={`ent-prog-fill ${progreso.esta_vivo === false ? 'ent-prog--low' : 'ent-prog--high'}`}
+                      style={{ width: `${progreso.porcentaje}%` }}
+                    />
+                  </div>
+                  <span className="ent-prog-pct">{progreso.porcentaje.toFixed(1)}%</span>
+                </div>
+                <p className="ent-monitor-sub2">
+                  Época {progreso.epoca_actual.toFixed(1)}{progreso.epocas_totales != null ? `/${progreso.epocas_totales}` : ''}
+                  {progreso.loss_actual != null && ` · loss ${progreso.loss_actual.toFixed(4)}`}
+                  {progreso.esta_vivo === false && ' · sin heartbeat reciente (posible cuelgue)'}
+                </p>
+              </div>
+            )}
+            {progresoUnavailable && <p className="ent-hint" style={{ marginTop: 4 }}>Progreso detallado (época/step/loss) no disponible aún en el servidor.</p>}
           </div>
         </div>
       )}
@@ -1801,6 +1872,290 @@ function SubirTab() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// SistemaPanel — HU-MON-04 (sistema/, liberar-memoria/, reiniciar-backend/)
+// ══════════════════════════════════════════════════════════════════════════════
+
+function SistemaPanel() {
+  const [info, setInfo]       = useState<SistemaInfo | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [err, setErr]         = useState('')
+
+  const [liberando, setLiberando]   = useState(false)
+  const [liberarMsg, setLiberarMsg] = useState('')
+
+  const [confirmRestart, setConfirmRestart]     = useState(false)
+  const [reiniciando, setReiniciando]           = useState(false)
+  const [restartMsg, setRestartMsg]             = useState('')
+  const [restartErr, setRestartErr]             = useState('')
+  const [restartUnavailable, setRestartUnavailable] = useState(false)
+
+  const load = useCallback(async () => {
+    setLoading(true); setErr('')
+    try { setInfo(await apiFetch('/entrenamiento/sistema/')) }
+    catch (e) { setErr(apiErr(e, 'No se pudo cargar el estado del sistema.')) }
+    finally { setLoading(false) }
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  const liberarMemoria = async () => {
+    setLiberando(true); setLiberarMsg('')
+    try {
+      const d = await apiFetch('/entrenamiento/sistema/liberar-memoria/', { method: 'POST' })
+      setLiberarMsg(d.mensaje ?? 'Memoria liberada.')
+      load()
+    } catch (e) { setLiberarMsg(apiErr(e, 'Error al liberar memoria.')) }
+    finally { setLiberando(false) }
+  }
+
+  const reiniciarBackend = async () => {
+    setReiniciando(true); setRestartMsg(''); setRestartErr(''); setRestartUnavailable(false)
+    try {
+      const d = await apiFetch('/entrenamiento/sistema/reiniciar-backend/', { method: 'POST' })
+      setRestartMsg(d.mensaje ?? 'Reinicio solicitado. Espera ~30-60s.')
+    } catch (e) {
+      if (isNotFound(e)) setRestartUnavailable(true)
+      else setRestartErr(apiErr(e, 'Error al solicitar el reinicio.'))
+    } finally {
+      setReiniciando(false); setConfirmRestart(false)
+    }
+  }
+
+  if (loading && !info) return <div className="ent-loading"><Loader2 size={18} className="spin" /> Cargando estado del sistema…</div>
+
+  return (
+    <div className="ent-section">
+      <div className="ent-section-head">
+        <div>
+          <h2 className="ent-section-title">Recursos del servidor</h2>
+          <p className="ent-section-sub">CPU, RAM y GPU disponibles para entrenamiento</p>
+        </div>
+        <button className="ent-btn ent-btn--ghost" onClick={load} type="button"><RefreshCw size={13} /> Actualizar</button>
+      </div>
+
+      {err && <div className="tc-api-error"><AlertTriangle size={14} /><span>{err}</span></div>}
+
+      {info && (
+        <>
+          {info.advertencias.map((a, i) => (
+            <div key={i} className="ent-warn"><AlertTriangle size={13} /><span>{a}</span></div>
+          ))}
+
+          <div className="ent-metrics-grid">
+            <div className="ent-metric-cell">
+              <span className="ent-metric-key">GPU</span>
+              <span className="ent-metric-val">
+                {info.gpu.disponible ? `${info.gpu.dispositivos.length} disponible${info.gpu.dispositivos.length !== 1 ? 's' : ''}` : 'No disponible'}
+              </span>
+            </div>
+            <div className="ent-metric-cell">
+              <span className="ent-metric-key">CPU</span>
+              <span className="ent-metric-val">
+                {info.cpu.uso_porcentaje != null ? `${info.cpu.uso_porcentaje}%` : `${info.cpu.nucleos_logicos} núcleos`}
+              </span>
+            </div>
+            <div className="ent-metric-cell">
+              <span className="ent-metric-key">RAM</span>
+              <span className="ent-metric-val">
+                {info.ram.disponible_gb != null && info.ram.total_gb != null
+                  ? `${info.ram.disponible_gb} / ${info.ram.total_gb} GB libres`
+                  : '—'}
+              </span>
+            </div>
+            <div className="ent-metric-cell">
+              <span className="ent-metric-key">Sistema operativo</span>
+              <span className="ent-metric-val">{info.sistema_operativo}</span>
+            </div>
+          </div>
+
+          {info.gpu.disponible && info.gpu.dispositivos.length > 0 && (
+            <div className="ent-gpu-grid">
+              {info.gpu.dispositivos.map(d => {
+                const usoPct = d.memoria_total_gb > 0 ? (d.memoria_reservada_gb / d.memoria_total_gb) * 100 : 0
+                const libreRatio = d.memoria_total_gb > 0 ? d.memoria_libre_gb / d.memoria_total_gb : 1
+                return (
+                  <div key={d.indice} className="ent-gpu-card">
+                    <div className="ent-gpu-head"><Cpu size={13} /><span className="ent-td-bold">{d.nombre}</span></div>
+                    <div className="ent-prog-wrap">
+                      <div className="ent-prog-bar">
+                        <div
+                          className={`ent-prog-fill ${libreRatio > 0.4 ? 'ent-prog--high' : libreRatio > 0.15 ? 'ent-prog--mid' : 'ent-prog--low'}`}
+                          style={{ width: `${Math.min(100, usoPct)}%` }}
+                        />
+                      </div>
+                      <span className="ent-prog-pct">{d.memoria_libre_gb.toFixed(1)} GB libres</span>
+                    </div>
+                    <p className="ent-hint">Total {d.memoria_total_gb} GB · reservada {d.memoria_reservada_gb} GB · CUDA {d.cuda_capability}</p>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {info.entrenamiento_en_curso && (
+            <div className="ent-monitor-running">
+              <Loader2 size={18} className="spin" />
+              <div>
+                <p className="ent-monitor-msg">Entrenamiento en curso: {info.entrenamiento_en_curso.nombre}</p>
+                <p className="ent-monitor-sub2">
+                  {info.entrenamiento_en_curso.lengua} · {info.entrenamiento_en_curso.modelo} · hilo: {info.entrenamiento_en_curso.estado_hilo}
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="ent-sistema-actions">
+            <div>
+              <button className="ent-btn ent-btn--ghost" onClick={liberarMemoria} disabled={liberando} type="button">
+                {liberando ? <><Loader2 size={13} className="spin" /> Liberando…</> : <><HardDrive size={13} /> Liberar memoria</>}
+              </button>
+              {liberarMsg && <p className="ent-hint" style={{ marginTop: 6 }}>{liberarMsg}</p>}
+            </div>
+
+            <div>
+              {!confirmRestart ? (
+                <button className="ent-btn ent-btn--danger" onClick={() => setConfirmRestart(true)} type="button">
+                  <Power size={13} /> Reiniciar backend
+                </button>
+              ) : (
+                <div className="ent-confirm-box">
+                  <p className="ent-hint" style={{ color: 'var(--red)', fontWeight: 600 }}>
+                    Esto va a desconectar a todos los usuarios por ~10-20s. ¿Confirmas?
+                  </p>
+                  <div className="ent-confirm-actions">
+                    <button className="ent-btn ent-btn--danger ent-btn--sm" onClick={reiniciarBackend} disabled={reiniciando} type="button">
+                      {reiniciando ? <><Loader2 size={12} className="spin" /> Reiniciando…</> : 'Sí, reiniciar'}
+                    </button>
+                    <button className="ent-btn ent-btn--ghost ent-btn--sm" onClick={() => setConfirmRestart(false)} disabled={reiniciando} type="button">
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+              {restartMsg && <p className="ent-hint" style={{ marginTop: 6 }}>{restartMsg}</p>}
+              {restartErr && <p className="ent-err-sm" style={{ marginTop: 6 }}>{restartErr}</p>}
+              {restartUnavailable && <div style={{ marginTop: 6 }}><NoDisponible>Reiniciar backend todavía no está disponible en el servidor.</NoDisponible></div>}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ProcesosTab — HU-MON-01 + HU-MON-02 + HU-MON-03
+// ══════════════════════════════════════════════════════════════════════════════
+
+function ProcesosTab() {
+  const [data, setData]       = useState<ProcesosResponse | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [unavailable, setUnavailable] = useState(false)
+  const [err, setErr]         = useState('')
+  const [detErr, setDetErr]   = useState<Record<string, string>>({})
+  const [deteniendo, setDeteniendo] = useState<Record<string, boolean>>({})
+
+  const load = useCallback(async () => {
+    setErr(''); setUnavailable(false)
+    try { setData(await apiFetch('/entrenamiento/procesos/')) }
+    catch (e) {
+      if (isNotFound(e)) setUnavailable(true)
+      else setErr(apiErr(e, 'No se pudo cargar el listado de procesos.'))
+    } finally { setLoading(false) }
+  }, [])
+
+  useEffect(() => {
+    load()
+    const iv = setInterval(load, 20000)
+    return () => clearInterval(iv)
+  }, [load])
+
+  const detener = async (id: string) => {
+    setDeteniendo(p => ({ ...p, [id]: true }))
+    setDetErr(p => { const n = { ...p }; delete n[id]; return n })
+    try { await apiFetch(`/entrenamiento/experimentos/${id}/cancelar/`, { method: 'POST' }); await load() }
+    catch (e) { setDetErr(p => ({ ...p, [id]: apiErr(e, 'Error al detener.') })) }
+    finally { setDeteniendo(p => ({ ...p, [id]: false })) }
+  }
+
+  return (
+    <div className="ent-section">
+      <SistemaPanel />
+
+      <div className="ent-section-head" style={{ marginTop: 8 }}>
+        <div>
+          <h2 className="ent-section-title">Procesos de entrenamiento</h2>
+          <p className="ent-section-sub">
+            Entrenamientos activos y su estado de salud
+            {data && ` · umbral de cuelgue: ${data.umbral_segundos}s`}
+          </p>
+        </div>
+        <button className="ent-btn ent-btn--ghost" onClick={load} type="button"><RefreshCw size={13} /> Actualizar</button>
+      </div>
+
+      {unavailable && <NoDisponible>El listado de procesos todavía no está disponible en el servidor.</NoDisponible>}
+      {err && <div className="tc-api-error"><AlertTriangle size={14} /><span>{err}</span></div>}
+
+      {loading && !data && !unavailable && !err ? (
+        <div className="ent-loading"><Loader2 size={18} className="spin" /> Cargando procesos…</div>
+      ) : data && (
+        data.procesos.length === 0 ? (
+          <div className="ent-empty"><CheckCircle2 size={16} /> No hay entrenamientos activos.</div>
+        ) : (
+          <div className="ent-table-wrap">
+            <table className="ent-table">
+              <thead>
+                <tr><th>Nombre</th><th>Lengua</th><th>Modelo</th><th>Progreso</th><th>Último heartbeat</th><th>Estado</th><th /></tr>
+              </thead>
+              <tbody>
+                {data.procesos.map(p => (
+                  <tr key={p.experimento_id} className={p.colgado ? 'ent-proc-row--colgado' : ''}>
+                    <td className="ent-td-bold">{p.nombre}</td>
+                    <td>{p.lengua}</td>
+                    <td><span className="ent-tipo-pill">{p.modelo?.split('/')[1] ?? p.modelo}</span></td>
+                    <td>
+                      <div className="ent-prog-wrap">
+                        <div className="ent-prog-bar">
+                          <div
+                            className={`ent-prog-fill ${p.porcentaje >= 70 ? 'ent-prog--high' : p.porcentaje >= 30 ? 'ent-prog--mid' : 'ent-prog--low'}`}
+                            style={{ width: `${p.porcentaje}%` }}
+                          />
+                        </div>
+                        <span className="ent-prog-pct">{p.epoca_actual.toFixed(1)}/{p.epocas_totales ?? '?'}</span>
+                      </div>
+                    </td>
+                    <td>{p.segundos_desde_heartbeat != null ? `hace ${p.segundos_desde_heartbeat}s` : 'sin datos'}</td>
+                    <td>
+                      {p.colgado
+                        ? <span className="ent-badge ent-badge--warn"><AlertTriangle size={10} /> Colgado</span>
+                        : p.esta_vivo
+                          ? <span className="ent-badge ent-badge--ok"><CheckCircle2 size={10} /> Vivo</span>
+                          : <span className="ent-badge ent-badge--warn"><AlertTriangle size={10} /> Iniciando</span>}
+                    </td>
+                    <td>
+                      {p.colgado && (
+                        <button
+                          className="ent-btn ent-btn--sm ent-btn--danger"
+                          onClick={() => detener(p.experimento_id)}
+                          disabled={deteniendo[p.experimento_id]} type="button"
+                        >
+                          {deteniendo[p.experimento_id] ? <Loader2 size={11} className="spin" /> : <StopCircle size={11} />} Detener
+                        </button>
+                      )}
+                      {detErr[p.experimento_id] && <p className="ent-err-sm">{detErr[p.experimento_id]}</p>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      )}
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // Page
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -1809,6 +2164,7 @@ const ALL_TABS: { id: Tab; label: string; Icon: LucideIcon; minRole: 'all' | 'ca
   { id: 'modelos',      label: 'Modelos',      Icon: Cpu,       minRole: 'all'       },
   { id: 'entrenar',     label: 'Entrenar',     Icon: Play,      minRole: 'canManage' },
   { id: 'experimentos', label: 'Experimentos', Icon: BarChart2, minRole: 'all'       },
+  { id: 'procesos',     label: 'Procesos',     Icon: Server,    minRole: 'all'       },
   { id: 'transcribir',  label: 'Transcribir',  Icon: Mic,       minRole: 'all'       },
   { id: 'subir',        label: 'Subir datos',  Icon: FolderPlus,minRole: 'canUpload' },
 ]
@@ -1852,6 +2208,7 @@ export default function Entrenamiento() {
         {tab === 'experimentos' && (
           <ExperimentosTab monitorId={monitorId} onClearMonitor={() => setMonitorId(null)} canManage={true} />
         )}
+        {tab === 'procesos' && <ProcesosTab />}
         {tab === 'transcribir' && <TranscribirTab />}
         {tab === 'subir' && <SubirTab />}
       </div>

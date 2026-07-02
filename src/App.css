@@ -2120,6 +2120,10 @@ a.contact-card .contact-card-icon { background: var(--blue); color: var(--white)
 .ent-btn--ghost:hover:not(:disabled) { background: var(--blue-light); }
 .ent-btn--sm  { padding: 5px 10px; min-height: 30px; font-size: .78rem; }
 .ent-btn--lg  { padding: 12px 24px; min-height: 46px; font-size: .93rem; }
+.ent-btn--danger {
+  background: var(--red-light); color: var(--red); border-color: rgba(220,38,38,.3);
+}
+.ent-btn--danger:hover:not(:disabled) { background: var(--red); color: var(--white); border-color: var(--red); }
 .ent-btn:disabled { opacity: .45; cursor: not-allowed; }
 .ent-btn-icon {
   display: inline-flex; align-items: center; justify-content: center;
@@ -3039,3 +3043,30 @@ a.contact-card .contact-card-icon { background: var(--blue); color: var(--white)
 .home-footer-note {
   font-size: .82rem; color: var(--gray-400); text-align: center; margin: 0;
 }
+
+/* ── Procesos tab — recursos del sistema, GPU, confirmación de reinicio ── */
+.ent-gpu-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+  gap: 12px;
+}
+.ent-gpu-card {
+  background: var(--white); border: 1px solid var(--gray-200); border-radius: var(--r-sm);
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;
+}
+.ent-gpu-head { display: flex; align-items: center; gap: 6px; color: var(--gray-600); }
+
+.ent-sistema-actions {
+  display: flex; align-items: flex-start; gap: 24px; flex-wrap: wrap;
+  padding-top: 8px; border-top: 1px solid var(--gray-200);
+}
+.ent-confirm-box {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px 12px; border-radius: var(--r-sm);
+  background: var(--red-light); border: 1px solid rgba(220,38,38,.25);
+  max-width: 320px;
+}
+.ent-confirm-actions { display: flex; gap: 8px; }
+
+.ent-proc-row--colgado { background: var(--red-light); }
+.ent-progreso-live { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
