@@ -1,27 +1,49 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --blue:       #014689;
-  --blue-dark:  #013266;
-  --blue-mid:   #01529e;
-  --blue-light: #e8f0fb;
-  --red:        #85002F;
-  --red-dark:   #6a0025;
-  --red-light:  #fdf0f3;
+  /* ── Marca: navy → teal (propuesta SAYTA) ── */
+  --navy:        #002855;
+  --blue:        #0a4d8c;   /* azul primario, seguro para texto sobre blanco */
+  --blue-dark:   #002855;   /* navy profundo — gradientes / superficies oscuras */
+  --blue-mid:    #0a5aa8;
+  --blue-light:  #e6f5f8;   /* fondo claro con tinte teal */
+
+  /* Acento teal */
+  --teal:        #00aebf;
+  --teal-dark:   #00839a;   /* teal seguro para texto */
+  --teal-bright: #00f5f7;
+  --teal-light:  #e3f6f8;
+
+  /* Gradiente firma */
+  --grad-brand:  linear-gradient(135deg, #002855 0%, #00aebf 100%);
+  --grad-mic:    linear-gradient(140deg, #002855 0%, #0a4d8c 52%, #00aebf 100%);
+
+  /* Rojo semántico (errores / grabación) */
+  --red:        #c0392b;
+  --red-dark:   #a5301f;
+  --red-light:  #fdeceb;
+
+  /* Tinta y grises (base navy) */
   --white:      #ffffff;
-  --off-white:  #f5f7fc;
-  --gray-100:   #f0f2f7;
-  --gray-200:   #e2e6ef;
-  --gray-400:   #9ca3af;
-  --gray-600:   #6b7280;
-  --gray-700:   #374151;
-  --gray-900:   #111827;
-  --font:       'Inter', system-ui, -apple-system, sans-serif;
-  --r:          14px;
-  --r-sm:       10px;
-  --shadow:     0 2px 16px rgba(1,70,137,.08);
-  --shadow-md:  0 4px 24px rgba(1,70,137,.12);
-  --shadow-lg:  0 8px 40px rgba(1,70,137,.16);
+  --off-white:  #f4f7fb;
+  --ink:        #0c1f33;
+  --gray-100:   #f3f6fa;
+  --gray-200:   #e4eaf1;
+  --gray-300:   #d3dce6;
+  --gray-400:   #9aa7b6;
+  --gray-500:   #6b7a8c;
+  --gray-600:   #46586b;
+  --gray-700:   #33475b;
+  --gray-900:   #0c1f33;
+
+  --font:         'Hanken Grotesk', system-ui, -apple-system, sans-serif;
+  --font-display: 'Space Grotesk', 'Hanken Grotesk', system-ui, sans-serif;
+  --r:          16px;
+  --r-sm:       12px;
+  --r-lg:       22px;
+  --shadow:     0 2px 16px rgba(0,40,85,.08);
+  --shadow-md:  0 12px 40px -18px rgba(0,40,85,.26);
+  --shadow-lg:  0 32px 64px -30px rgba(0,40,85,.32);
 }
 
 html { scroll-behavior: smooth; }

@@ -47,16 +47,17 @@ export default function Home() {
         <header className="home-hero">
           <div className="home-hero-logos">
             <img
-              src="https://cdn.unimagdalena.edu.co/images/escudo/bg_dark/192.png"
+              src="/Assets/logos/unimagdalena-escudo.png"
               alt="Universidad del Magdalena"
               className="home-logo-uni"
-              width="64" height="64"
+              height="66"
             />
+            <div className="logo-divider" aria-hidden="true" style={{ height: 48, background: 'var(--gray-200)' }} />
             <img
-              src="/SAYTA LOGO.jpg"
+              src="/Assets/logos/sayta-logo.svg"
               alt="SAYTA"
               className="home-logo-sayta"
-              width="64" height="64"
+              height="40"
             />
           </div>
           <h1 id="home-heading" className="home-title">SAYTA</h1>

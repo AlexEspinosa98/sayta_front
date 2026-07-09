@@ -4,7 +4,8 @@ import {
   Mail, MapPin, ExternalLink, Award,
 } from 'lucide-react'
 
-const CDN = 'https://cdn.unimagdalena.edu.co/images'
+const ESCUDO = '/Assets/logos/unimagdalena-escudo.png'
+const SAYTA_LOGO = '/Assets/logos/sayta-logo.svg'
 
 const features = [
   { icon: <Mic2 size={22} aria-hidden="true" />,       title: 'Reconocimiento de voz',    desc: 'Captura audio en Arhuaco o Kogui y lo convierte en texto para su traducción automática.' },
@@ -66,11 +67,11 @@ export default function About() {
           </div>
           <div className="about-intro-logo" aria-hidden="true">
             <img
-              src={`${CDN}/escudo/bg_light/384.png`}
+              src={ESCUDO}
               alt=""
               className="about-uni-logo"
             />
-            <img src="/SAYTA LOGO.jpg" alt="" className="about-sayta-logo" />
+            <img src={SAYTA_LOGO} alt="" className="about-sayta-logo" />
           </div>
         </div>
       </section>
@@ -183,8 +184,9 @@ export default function About() {
       <section className="section uni-section" aria-labelledby="uni-heading">
         <div className="container uni-section-inner">
           <div className="uni-logos" aria-hidden="true">
-            <img src={`${CDN}/escudo/bg_dark/192.png`} alt="" className="uni-logo-dark" />
-            <img src={`${CDN}/acreditacion/blue/192.png`} alt="" className="uni-logo-dark" />
+            <span className="uni-logo-badge">
+              <img src={ESCUDO} alt="" className="uni-logo-dark" />
+            </span>
           </div>
           <div className="uni-text">
             <h2 id="uni-heading" className="section-title section-title-light">

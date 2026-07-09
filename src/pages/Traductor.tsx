@@ -2,7 +2,8 @@ import { useState, useRef, useId, useEffect } from 'react'
 import {
   Mic, MicOff, Upload, Languages,
   Loader2, Volume2, Copy, Check, AlertCircle,
-  ArrowRight, ArrowLeft, ArrowRightLeft, Star, XCircle,
+  ArrowRightLeft, Star, XCircle, ChevronDown, Sparkles, Type,
+  Keyboard, X,
 } from 'lucide-react'
 import {
   useSpecialKeyboard, SpecialKeyboardPanel, SpecialKeyboardToggle,
@@ -78,6 +79,7 @@ export default function Traductor() {
   const [direccion, setDireccion]       = useState<Direccion>('es_a_lengua')
   const [inputMode, setInputMode]       = useState<InputMode>('text')
   const [inputText, setInputText]       = useState('')
+  const [langMenuOpen, setLangMenuOpen] = useState(false)
 
   const rec         = useAudioRecorder()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -109,10 +111,23 @@ export default function Traductor() {
       .finally(() => setLoadingL(false))
   }, [])
 
+  const resetResults = () => { setResult(null); setTranscripcion(null); setApiError('') }
+
   const handleSetInputMode = (mode: InputMode) => {
     setInputMode(mode)
     if (mode === 'audio') setDireccion('lengua_a_es')
-    setResult(null); setTranscripcion(null); setApiError('')
+    resetResults()
+  }
+
+  const swapDireccion = () => {
+    if (inputMode === 'audio') return
+    // Como los buenos traductores: el texto traducido pasa a la caja de entrada
+    if (selected) {
+      const translated = sourceIsEs ? selected.termino : selected.termino_es
+      setInputText(translated)
+    }
+    setDireccion(d => (d === 'es_a_lengua' ? 'lengua_a_es' : 'es_a_lengua'))
+    resetResults()
   }
 
   const selectedLengua = lenguas.find(l => l.id === lenguaId)
@@ -189,138 +204,268 @@ export default function Traductor() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const langName = selectedLengua?.nombre ?? 'lengua indígena'
-  const inputLabel = direccion === 'es_a_lengua' ? 'Texto en español' : `Texto en ${langName}`
-  const inputPlaceholder = direccion === 'es_a_lengua' ? 'Escribe en español…' : `Escribe en ${langName}…`
-  const dirLabel = direccion === 'es_a_lengua' ? `Español → ${langName}` : `${langName} → Español`
+  const langName    = selectedLengua?.nombre ?? 'Lengua indígena'
+  const sourceIsEs  = direccion === 'es_a_lengua'
+  const sourceLabel = sourceIsEs ? 'Español' : langName
+  const targetLabel = sourceIsEs ? langName : 'Español'
+  const inputPlaceholder = sourceIsEs ? 'Escribe en español…' : `Escribe en ${langName}…`
   const bestIdx = result ? result.resultados.findIndex(r => r.mejor_coincidencia) : -1
+
+  // Texto traducido según la dirección (lo que se muestra grande y lo que viaja al invertir)
+  const targetPrimary   = selected ? (sourceIsEs ? selected.termino : selected.termino_es) : ''
+  const targetSecondary = selected ? (sourceIsEs ? selected.termino_es : selected.termino) : ''
+
+  // ── Chip renderer for the language bar ──────────────────────────────────────
+  const LangChip = ({ side }: { side: 'source' | 'target' }) => {
+    const isEs = side === 'source' ? sourceIsEs : !sourceIsEs
+    if (isEs) {
+      return (
+        <div className="trx-chip trx-chip--static">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" strokeWidth="1.7" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" /><path d="M3 12h18" /><path d="M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18" />
+          </svg>
+          <span>Español</span>
+        </div>
+      )
+    }
+    // Lengua chip = dropdown
+    return (
+      <div className="trx-chip-wrap">
+        <button
+          type="button"
+          className="trx-chip trx-chip--select"
+          aria-haspopup="listbox"
+          aria-expanded={langMenuOpen}
+          disabled={loadingLenguas || lenguas.length === 0}
+          onClick={() => setLangMenuOpen(o => !o)}
+        >
+          <span className="trx-chip-dot" aria-hidden="true" />
+          <span className="truncate">
+            {loadingLenguas ? 'Cargando…' : lenguas.length === 0 ? 'Sin lenguas' : langName}
+          </span>
+          <ChevronDown size={14} aria-hidden="true" />
+        </button>
+        {langMenuOpen && (
+          <>
+            <div className="trx-menu-backdrop" onClick={() => setLangMenuOpen(false)} />
+            <ul className="trx-menu" role="listbox" aria-label="Selecciona una lengua indígena">
+              {lenguas.map(l => (
+                <li key={l.id} role="option" aria-selected={l.id === lenguaId}>
+                  <button
+                    type="button"
+                    className={`trx-menu-item ${l.id === lenguaId ? 'trx-menu-item--active' : ''}`}
+                    onClick={() => { setLenguaId(l.id); setLangMenuOpen(false); resetResults() }}
+                  >
+                    <span className="trx-menu-avatar" aria-hidden="true">{l.nombre.slice(0, 2)}</span>
+                    <span className="trx-menu-body">
+                      <span className="trx-menu-name">{l.nombre}</span>
+                      {!l.embedding_activo && <span className="trx-menu-note">Sin embedding activo</span>}
+                    </span>
+                    {l.id === lenguaId && (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5" /></svg>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
+    )
+  }
 
   return (
     <section className="translator-page" aria-labelledby="translator-heading">
       <div className="translator-page-inner">
 
         <header className="translator-page-header">
-          <h1 id="translator-heading" className="tp-title">
-            <span aria-hidden="true"><Languages size={28} /></span>
-            Traductor SAYTA
-          </h1>
-          <p className="tp-subtitle">Búsqueda semántica por embeddings · lenguas indígenas colombianas</p>
+          <h1 id="translator-heading" className="tp-title">Traductor SAYTA</h1>
+          <p className="tp-subtitle">Escribe o habla · traducción semántica para lenguas indígenas colombianas</p>
         </header>
 
-        <div className="tc" role="region" aria-label="Panel de traducción">
+        <div className="trx-card" role="region" aria-label="Panel de traducción">
 
-          {/* ── Fila superior ──────────────────────────────── */}
-          <div className="tc-top">
+          {/* ── Barra de idioma ─────────────────────────────── */}
+          <div className="trx-langbar">
+            <LangChip side="source" />
+            <button
+              type="button"
+              className="trx-swap"
+              onClick={swapDireccion}
+              disabled={inputMode === 'audio'}
+              aria-label="Invertir dirección de traducción"
+              title={inputMode === 'audio' ? 'El audio siempre traduce a español' : 'Invertir'}
+            >
+              <ArrowRightLeft size={18} aria-hidden="true" />
+            </button>
+            <LangChip side="target" />
+          </div>
 
-            <fieldset className="tc-fieldset tc-fieldset--grow">
-              <legend className="tc-legend">Lengua indígena</legend>
-              <div className="lang-selector" role="group">
-                {loadingLenguas ? (
-                  <span className="lang-pill lang-pill-loading">
-                    <Loader2 size={13} className="spin" /> Cargando…
-                  </span>
-                ) : lenguas.length === 0 ? (
-                  <span className="lang-pill lang-pill-empty">Sin lenguas disponibles</span>
-                ) : (
-                  lenguas.map(l => (
+          {/* ── Selector de entrada ─────────────────────────── */}
+          <div className="trx-modebar" role="group" aria-label="Tipo de entrada">
+            <button
+              type="button"
+              className={`trx-mode ${inputMode === 'text' ? 'trx-mode--active' : ''}`}
+              aria-pressed={inputMode === 'text'}
+              onClick={() => handleSetInputMode('text')}
+            >
+              <Type size={15} aria-hidden="true" /> Texto
+            </button>
+            <button
+              type="button"
+              className={`trx-mode ${inputMode === 'audio' ? 'trx-mode--active' : ''}`}
+              aria-pressed={inputMode === 'audio'}
+              onClick={() => handleSetInputMode('audio')}
+            >
+              <Mic size={15} aria-hidden="true" /> Audio
+            </button>
+          </div>
+
+          {/* ── Paneles origen → destino ────────────────────── */}
+          <div className="trx-panels">
+
+            {/* Origen */}
+            <div className="trx-panel">
+              <div className="trx-panel-head">
+                <span className="trx-panel-label">{sourceLabel}</span>
+                <Volume2 size={18} className="trx-panel-mute" aria-hidden="true" />
+              </div>
+
+              {inputMode === 'text' ? (
+                <>
+                  <label htmlFor={textareaId} className="visually-hidden">Texto en {sourceLabel}</label>
+                  <textarea
+                    ref={textareaRef}
+                    id={textareaId}
+                    className="trx-textarea"
+                    placeholder={inputPlaceholder}
+                    value={inputText}
+                    onChange={e => setInputText(e.target.value)}
+                    aria-required="true"
+                    aria-describedby={result ? resultId : undefined}
+                    onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleTranslate() }}
+                  />
+                  <div className="trx-panel-foot">
+                    <SpecialKeyboardToggle
+                      open={kb.open}
+                      onToggle={() => kb.open ? kb.setOpen(false) : kb.openKeyboard()}
+                    />
+                    <span className="trx-count">{inputText.length} / 5000</span>
+                  </div>
+                </>
+              ) : (
+                <div className="trx-audio">
+                  {rec.isRecording ? (
+                    <div className="trx-live" aria-live="polite">
+                      <div className="trx-live-orb">
+                        <span className="trx-live-ring" /><span className="trx-live-ring trx-live-ring--2" />
+                        <div className="trx-live-core"><Mic size={30} aria-hidden="true" /></div>
+                      </div>
+                      <div className="trx-wave" aria-hidden="true">
+                        {[16, 30, 44, 26, 50, 34, 22, 46, 38, 28, 42, 20].map((h, i) => (
+                          <span key={i} style={{ height: h, animationDelay: `${(i % 6) * 0.08}s` }} />
+                        ))}
+                      </div>
+                      <span className="trx-live-label">Escuchando…</span>
+                    </div>
+                  ) : rec.audioFile && rec.audioUrl ? (
+                    <div className="trx-audio-preview">
+                      <audio controls src={rec.audioUrl} className="trx-audio-player" />
+                      <div className="trx-audio-meta">
+                        <Volume2 size={13} aria-hidden="true" />
+                        <span className="truncate">{rec.audioFile.name}</span>
+                        <button className="trx-icon-btn" onClick={rec.clearAudio} type="button" aria-label="Quitar audio">
+                          <XCircle size={15} />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="trx-audio-hint">Graba tu voz en {langName} o sube un archivo — se transcribe y traduce al español.</p>
+                  )}
+
+                  <div className="trx-audio-actions">
                     <button
-                      key={l.id}
                       type="button"
-                      className={`lang-pill ${lenguaId === l.id ? 'lang-pill-active' : ''}`}
-                      aria-pressed={lenguaId === l.id}
-                      onClick={() => { setLenguaId(l.id); setResult(null); setTranscripcion(null); setApiError('') }}
-                      title={l.embedding_activo ? 'Embedding activo' : 'Sin embedding activo'}
+                      className={`trx-rec-btn ${rec.isRecording ? 'trx-rec-btn--active' : ''}`}
+                      aria-pressed={rec.isRecording}
+                      onClick={rec.toggleRecording}
                     >
-                      {l.nombre}
-                      {!l.embedding_activo && <span className="lang-pill-warn" aria-label="Sin embedding" />}
+                      {rec.isRecording
+                        ? <><MicOff size={18} aria-hidden="true" /> Detener</>
+                        : <><Mic size={18} aria-hidden="true" /> Grabar</>}
                     </button>
-                  ))
+                    <button type="button" className="trx-upload-btn"
+                      onClick={() => fileInputRef.current?.click()} aria-label="Subir archivo de audio">
+                      <Upload size={16} aria-hidden="true" /> Subir
+                    </button>
+                    <input ref={fileInputRef} type="file" accept=".wav,.mp3,.ogg,.flac,.m4a,.mp4"
+                      aria-label="Seleccionar archivo de audio" className="visually-hidden"
+                      onChange={e => {
+                        const f = e.target.files?.[0]
+                        if (f) { rec.clearAudio(); rec.setFromFile(f) }
+                        e.target.value = ''
+                      }} />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Destino */}
+            <div className="trx-panel trx-panel--target">
+              <div className="trx-panel-head">
+                <span className="trx-panel-label trx-panel-label--target">{targetLabel}</span>
+                {result && !isLoading && (
+                  <span className="trx-ai-badge"><Sparkles size={12} aria-hidden="true" /> Traducido por IA</span>
                 )}
               </div>
-            </fieldset>
 
-            <fieldset className="tc-fieldset" aria-disabled={inputMode === 'audio'}>
-              <legend className="tc-legend">Dirección</legend>
-              <div className="mode-pills" role="group">
-                <button
-                  type="button"
-                  className={`mode-pill ${direccion === 'es_a_lengua' ? 'mode-pill-active' : ''}`}
-                  aria-pressed={direccion === 'es_a_lengua'}
-                  disabled={inputMode === 'audio'}
-                  onClick={() => { setDireccion('es_a_lengua'); setResult(null) }}
-                >
-                  <ArrowRight size={13} aria-hidden="true" />
-                  ES → Lengua
-                </button>
-                <button
-                  type="button"
-                  className={`mode-pill ${direccion === 'lengua_a_es' ? 'mode-pill-active' : ''}`}
-                  aria-pressed={direccion === 'lengua_a_es'}
-                  disabled={inputMode === 'audio'}
-                  onClick={() => { setDireccion('lengua_a_es'); setResult(null) }}
-                >
-                  <ArrowLeft size={13} aria-hidden="true" />
-                  Lengua → ES
-                </button>
+              <div className="trx-target-body" id={resultId} aria-live="polite">
+                {isLoading ? (
+                  <div className="trx-target-loading">
+                    <Loader2 size={22} className="spin" aria-hidden="true" />
+                    <span>{inputMode === 'audio' ? 'Transcribiendo audio…' : 'Buscando términos similares…'}</span>
+                  </div>
+                ) : selected ? (
+                  <>
+                    <p className="trx-target-term">{targetPrimary}</p>
+                    {targetSecondary && <p className="trx-target-es">{targetSecondary}</p>}
+                    {selected.definicion && <p className="trx-target-def">{selected.definicion}</p>}
+                  </>
+                ) : (
+                  <p className="trx-target-placeholder">La traducción aparecerá aquí.</p>
+                )}
               </div>
-            </fieldset>
 
-            <fieldset className="tc-fieldset">
-              <legend className="tc-legend">Entrada</legend>
-              <div className="mode-pills" role="group">
-                <button
-                  type="button"
-                  className={`mode-pill ${inputMode === 'text' ? 'mode-pill-active' : ''}`}
-                  aria-pressed={inputMode === 'text'}
-                  onClick={() => handleSetInputMode('text')}
-                >
-                  <Languages size={13} aria-hidden="true" />
-                  Texto
-                </button>
-                <button
-                  type="button"
-                  className={`mode-pill ${inputMode === 'audio' ? 'mode-pill-active' : ''}`}
-                  aria-pressed={inputMode === 'audio'}
-                  onClick={() => handleSetInputMode('audio')}
-                >
-                  <Mic size={13} aria-hidden="true" />
-                  Audio
-                </button>
-              </div>
-            </fieldset>
-
+              {selected && !isLoading && (
+                <div className="trx-panel-foot trx-panel-foot--target">
+                  <span className={`trx-badge-flag ${selectedIdx === bestIdx ? 'is-best' : ''}`}>
+                    <Star size={12} aria-hidden="true" />
+                    {selectedIdx === bestIdx ? 'Mejor coincidencia' : 'Opción elegida'}
+                  </span>
+                  <div className="trx-foot-right">
+                    <ProbBadge prob={selected.probabilidad} />
+                    <button type="button" className="trx-icon-btn trx-icon-btn--bordered" onClick={handleCopy}
+                      aria-label={copied ? 'Copiado' : 'Copiar traducción'}>
+                      {copied ? <Check size={16} /> : <Copy size={16} />}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* ── Dirección visual ───────────────────────────── */}
-          <div className="tc-dir-banner" aria-live="polite">
-            <ArrowRightLeft size={13} aria-hidden="true" />
-            <span>{dirLabel}</span>
-          </div>
-
-          {/* ── Área de entrada ────────────────────────────── */}
-          {inputMode === 'text' ? (
-            <div className="tc-input-wrap">
-              <label htmlFor={textareaId} className="tc-label">{inputLabel}</label>
-              <textarea
-                ref={textareaRef}
-                id={textareaId}
-                className="tc-textarea"
-                placeholder={inputPlaceholder}
-                value={inputText}
-                onChange={e => setInputText(e.target.value)}
-                rows={4}
-                aria-required="true"
-                aria-describedby={result ? resultId : undefined}
-                onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleTranslate() }}
-              />
-              <span className="tc-char-count" aria-live="polite" aria-atomic="true">
-                {inputText.length} {inputText.length === 1 ? 'carácter' : 'caracteres'}
-              </span>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 6 }}>
-                <SpecialKeyboardToggle
-                  open={kb.open}
-                  onToggle={() => kb.open ? kb.setOpen(false) : kb.openKeyboard()}
-                />
+          {/* ── Teclado de caracteres especiales (full width) ── */}
+          {inputMode === 'text' && kb.open && (
+            <div className="trx-kb" role="group" aria-label="Teclado de caracteres especiales">
+              <div className="trx-kb-head">
+                <span className="trx-kb-title">
+                  <span className="trx-kb-badge" aria-hidden="true"><Keyboard size={15} /></span>
+                  Caracteres de lenguas indígenas
+                  <span className="trx-kb-hint">toca para insertar en el cursor</span>
+                </span>
+                <button type="button" className="trx-kb-close" onClick={() => kb.setOpen(false)} aria-label="Cerrar teclado">
+                  <X size={16} aria-hidden="true" />
+                </button>
               </div>
               <SpecialKeyboardPanel
                 open={kb.open}
@@ -331,165 +476,86 @@ export default function Traductor() {
                 onEnter={() => kb.insertAtCursor('\n')}
               />
             </div>
-          ) : (
-            <div className="tc-audio" role="group" aria-label="Entrada de audio">
-              <button
-                type="button"
-                className={`audio-record-btn ${rec.isRecording ? 'audio-record-btn--active' : ''}`}
-                aria-pressed={rec.isRecording}
-                aria-label={rec.isRecording ? 'Detener grabación' : 'Iniciar grabación de voz'}
-                onClick={rec.toggleRecording}
-              >
-                {rec.isRecording
-                  ? <><MicOff size={20} aria-hidden="true" /> Detener <span className="rec-dot" aria-hidden="true" /></>
-                  : <><Mic size={20} aria-hidden="true" /> Grabar</>}
-              </button>
-              <span className="audio-or" aria-hidden="true">o</span>
-              <button type="button" className="audio-upload-btn"
-                onClick={() => fileInputRef.current?.click()} aria-label="Subir archivo de audio">
-                <Upload size={16} aria-hidden="true" /> Subir archivo
-              </button>
-              <input ref={fileInputRef} type="file" accept=".wav,.mp3,.ogg,.flac,.m4a,.mp4"
-                aria-label="Seleccionar archivo de audio" className="visually-hidden"
-                onChange={e => {
-                  const f = e.target.files?.[0]
-                  if (f) { rec.clearAudio(); rec.setFromFile(f) }
-                  e.target.value = ''
-                }} />
-              {rec.audioFile && rec.audioUrl && (
-                <div className="tc-audio-preview">
-                  <audio controls src={rec.audioUrl} className="ent-audio-player" />
-                  <div className="ent-audio-preview-info">
-                    <Volume2 size={12} />
-                    <span className="truncate">{rec.audioFile.name}</span>
-                    <button className="ent-btn-icon" onClick={rec.clearAudio} type="button" aria-label="Quitar audio">
-                      <XCircle size={14} />
-                    </button>
-                  </div>
-                </div>
-              )}
-              <p className="tc-audio-hint">Graba voz en lengua indígena — se transcribe y traduce al español</p>
-            </div>
           )}
 
-          {/* ── Botón principal ────────────────────────────── */}
+          {/* ── Botón traducir ──────────────────────────────── */}
           <button
             type="button"
-            className="translate-btn"
+            className="trx-translate-btn"
             onClick={handleTranslate}
             disabled={isLoading || !canTranslate || rec.isRecording}
             aria-busy={isLoading}
             title={inputMode === 'text' ? 'También puedes pulsar Ctrl+Enter' : undefined}
           >
             {isLoading
-              ? <><Loader2 size={18} className="spin" aria-hidden="true" /> {inputMode === 'audio' ? 'Transcribiendo…' : 'Buscando…'}</>
+              ? <><Loader2 size={19} className="spin" aria-hidden="true" /> {inputMode === 'audio' ? 'Transcribiendo…' : 'Traduciendo…'}</>
               : inputMode === 'audio'
-                ? <><Mic size={18} aria-hidden="true" /> {rec.audioFile ? 'Transcribir y traducir' : 'Graba o sube un audio'}</>
-                : <><Languages size={18} aria-hidden="true" /> Traducir</>}
+                ? <><Mic size={19} aria-hidden="true" /> {rec.audioFile ? 'Transcribir y traducir' : 'Graba o sube un audio'}</>
+                : <><Languages size={19} aria-hidden="true" /> Traducir</>}
           </button>
-
-          {/* ── Error ──────────────────────────────────────── */}
-          {apiError && (
-            <div className="tc-api-error" role="alert">
-              <AlertCircle size={16} aria-hidden="true" />
-              <span>{apiError}</span>
-            </div>
-          )}
-
-          {/* ── Loading ────────────────────────────────────── */}
-          {isLoading && (
-            <div className="tc-result tc-result--loading">
-              <Loader2 size={20} className="spin" aria-hidden="true" />
-              <span>{inputMode === 'audio' ? 'Transcribiendo audio…' : 'Buscando términos similares…'}</span>
-            </div>
-          )}
-
-          {/* ── Transcripción (solo modo audio) ────────────── */}
-          {transcripcion && !isLoading && (
-            <div className="tc-transcripcion" role="status">
-              <span className="tc-transcripcion-label"><Mic size={13} /> Transcripción</span>
-              <span className="tc-transcripcion-text">{transcripcion}</span>
-            </div>
-          )}
-
-          {/* ── Resultado ──────────────────────────────────── */}
-          {result && !isLoading && selected && (
-            <div id={resultId} role="status" aria-live="polite" aria-label="Resultados de traducción">
-
-              <div className="tc-conclusion">
-                <div className="tc-conclusion-head">
-                  <span className="tc-conclusion-badge">
-                    <Star size={11} aria-hidden="true" />
-                    {selectedIdx === bestIdx ? 'Mejor coincidencia' : 'Opción seleccionada'}
-                  </span>
-                  <button type="button" className="copy-btn" onClick={handleCopy}
-                    aria-label={copied ? 'Copiado' : 'Copiar traducción'}>
-                    {copied
-                      ? <><Check size={13} aria-hidden="true" /> Copiado</>
-                      : <><Copy size={13} aria-hidden="true" /> Copiar</>}
-                  </button>
-                </div>
-                <div className="tc-conclusion-body">
-                  <div className="tc-conclusion-terms">
-                    <span className="tc-conclusion-term">{selected.termino}</span>
-                    <span className="tc-conclusion-sep" aria-hidden="true">·</span>
-                    <span className="tc-conclusion-es">{selected.termino_es}</span>
-                  </div>
-                  <p className="tc-conclusion-def">{selected.definicion}</p>
-                </div>
-                <div className="tc-conclusion-foot">
-                  <span className="tc-conclusion-prob-num">{selected.probabilidad.toFixed(1)}%</span>
-                  <span className="tc-conclusion-prob-label">de probabilidad</span>
-                  <div className="tc-conclusion-bar">
-                    <div className="tc-conclusion-fill" style={{ width: `${selected.probabilidad}%` }} />
-                  </div>
-                </div>
-              </div>
-
-              <p className="tc-opts-label">Elige una opción:</p>
-              <div className="tc-results-list" role="radiogroup" aria-label="Opciones de traducción">
-                {result.resultados.map((r, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    role="radio"
-                    aria-checked={selectedIdx === i}
-                    className={[
-                      'tc-result-card',
-                      selectedIdx === i ? 'tc-result-card--selected' : '',
-                      r.mejor_coincidencia ? 'tc-result-card--best' : '',
-                    ].join(' ').trim()}
-                    onClick={() => setSelectedIdx(i)}
-                  >
-                    <span className="tc-result-rank" aria-label={`Opción ${i + 1}`}>#{i + 1}</span>
-                    <div className="tc-result-body">
-                      <span className="tc-result-term">
-                        {r.termino}
-                        {r.mejor_coincidencia && (
-                          <span className="tc-result-best-tag" aria-label="Mejor coincidencia">★</span>
-                        )}
-                      </span>
-                      <span className="tc-result-es">{r.termino_es}</span>
-                      <span className="tc-result-def">{r.definicion}</span>
-                    </div>
-                    <ProbBadge prob={r.probabilidad} />
-                  </button>
-                ))}
-              </div>
-
-              {result.embedding.modelo && (
-                <p className="tc-emb-info">
-                  {result.embedding.version
-                    ? `Embedding ${result.embedding.version} · ${result.embedding.num_terminos.toLocaleString()} términos · `
-                    : 'Modelo ASR: '}
-                  {result.embedding.modelo}
-                </p>
-              )}
-
-            </div>
-          )}
-
         </div>
+
+        {/* ── Error ───────────────────────────────────────── */}
+        {apiError && (
+          <div className="tc-api-error" role="alert">
+            <AlertCircle size={16} aria-hidden="true" />
+            <span>{apiError}</span>
+          </div>
+        )}
+
+        {/* ── Transcripción (audio) ───────────────────────── */}
+        {transcripcion && !isLoading && (
+          <div className="trx-transcripcion" role="status">
+            <span className="trx-transcripcion-label"><Mic size={13} aria-hidden="true" /> Transcripción</span>
+            <span className="trx-transcripcion-text">{transcripcion}</span>
+          </div>
+        )}
+
+        {/* ── Otras coincidencias ─────────────────────────── */}
+        {result && !isLoading && result.resultados.length > 1 && (
+          <div className="trx-alts" role="status" aria-label="Otras coincidencias">
+            <p className="tc-opts-label">Otras coincidencias — elige una opción</p>
+            <div className="tc-results-list" role="radiogroup" aria-label="Opciones de traducción">
+              {result.resultados.map((r, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  role="radio"
+                  aria-checked={selectedIdx === i}
+                  className={[
+                    'tc-result-card',
+                    selectedIdx === i ? 'tc-result-card--selected' : '',
+                    r.mejor_coincidencia ? 'tc-result-card--best' : '',
+                  ].join(' ').trim()}
+                  onClick={() => setSelectedIdx(i)}
+                >
+                  <span className="tc-result-rank" aria-label={`Opción ${i + 1}`}>#{i + 1}</span>
+                  <div className="tc-result-body">
+                    <span className="tc-result-term">
+                      {r.termino}
+                      {r.mejor_coincidencia && (
+                        <span className="tc-result-best-tag" aria-label="Mejor coincidencia">★</span>
+                      )}
+                    </span>
+                    <span className="tc-result-es">{r.termino_es}</span>
+                    <span className="tc-result-def">{r.definicion}</span>
+                  </div>
+                  <ProbBadge prob={r.probabilidad} />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {result && result.embedding.modelo && !isLoading && (
+          <p className="tc-emb-info">
+            {result.embedding.version
+              ? `Embedding ${result.embedding.version} · ${result.embedding.num_terminos.toLocaleString()} términos · `
+              : 'Modelo ASR: '}
+            {result.embedding.modelo}
+          </p>
+        )}
+
       </div>
     </section>
   )

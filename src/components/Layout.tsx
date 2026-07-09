@@ -2,7 +2,8 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { BookOpen, Home, Library, Activity, Tag, Unlock, Languages } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
-const CDN = 'https://cdn.unimagdalena.edu.co/images'
+const ESCUDO = '/Assets/logos/unimagdalena-escudo.png'
+const SAYTA_LOGO = '/Assets/logos/sayta-logo.svg'
 
 export default function Layout() {
   const { isUnlocked, lock } = useAuth()
@@ -24,23 +25,21 @@ export default function Layout() {
               aria-label="Sitio oficial de la Universidad del Magdalena (abre en nueva pestaña)"
             >
               <img
-                src={`${CDN}/escudo/bg_dark/192.png`}
+                src={ESCUDO}
                 alt="Universidad del Magdalena"
                 className="logo-escudo"
-                width="46"
-                height="46"
+                width="42"
+                height="42"
               />
             </a>
             <div className="logo-divider" aria-hidden="true" />
             <NavLink to="/" className="header-sayta-link" aria-label="Ir al Traductor SAYTA">
               <img
-                src="/SAYTA LOGO.jpg"
+                src={SAYTA_LOGO}
                 alt="SAYTA"
                 className="logo-sayta"
-                width="34"
-                height="34"
+                height="25"
               />
-              <span className="header-sayta-name" aria-hidden="true">SAYTA</span>
             </NavLink>
           </div>
 
@@ -98,9 +97,9 @@ export default function Layout() {
       <footer className="footer" role="contentinfo">
         <div className="footer-inner">
           <div className="footer-logos" aria-label="Logos institucionales">
-            <img src={`${CDN}/escudo/bg_dark/128.png`} alt="Universidad del Magdalena" className="footer-logo" width="42" height="42" />
-            <img src={`${CDN}/acreditacion/blue/128.png`} alt="Acreditación de Alta Calidad" className="footer-logo" width="42" height="42" />
-            <img src="/SAYTA LOGO.jpg" alt="SAYTA" className="footer-logo footer-logo-sayta" width="42" height="36" />
+            <img src={SAYTA_LOGO} alt="SAYTA" className="footer-logo footer-logo-sayta" height="26" />
+            <div className="logo-divider" aria-hidden="true" style={{ background: 'var(--gray-200)' }} />
+            <img src={ESCUDO} alt="Universidad del Magdalena · Acreditada en Alta Calidad" className="footer-logo" width="44" height="44" />
           </div>
           <p className="footer-text">
             © {new Date().getFullYear()} Universidad del Magdalena · SAYTA – Sistema de Audio y Traducción Ancestral
