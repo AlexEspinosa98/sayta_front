@@ -103,20 +103,13 @@ export default function Layout() {
                   <BookOpen size={16} aria-hidden="true" /><span>Acerca de</span>
                 </NavLink>
               </li>
-              {isUnlocked && (
-                <li className="nav-lock-item">
-                  <button className="nav-link nav-link-lock" onClick={() => { lock(); closeMenu() }} type="button">
-                    <Unlock size={16} aria-hidden="true" /><span>Bloquear acceso</span>
-                  </button>
-                </li>
-              )}
             </ul>
           </nav>
 
           <div className="header-actions">
             {isUnlocked && (
               <button className="header-lock-btn" onClick={lock} title="Bloquear acceso" aria-label="Bloquear acceso">
-                <Unlock size={15} aria-hidden="true" /><span>Bloquear</span>
+                <Unlock size={16} aria-hidden="true" /><span>Bloquear</span>
               </button>
             )}
             <button

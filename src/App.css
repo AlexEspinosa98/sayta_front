@@ -104,8 +104,10 @@
 .nav-link-active { background: var(--teal-light) !important; color: var(--teal-dark) !important; }
 
 /* Acciones del header + hamburguesa */
+.header-inner > * { min-width: 0; }
+.header-brand { flex-shrink: 1; overflow: hidden; }
 .header-nav { display: flex; }
-.header-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .header-menu-btn {
   display: none;               /* visible solo en móvil */
   width: 44px; height: 44px; align-items: center; justify-content: center;
@@ -114,11 +116,6 @@
   transition: background .15s, border-color .15s, color .15s;
 }
 .header-menu-btn:hover { background: var(--teal-light); border-color: var(--teal); color: var(--teal-dark); }
-.nav-lock-item { display: none; }   /* el "Bloquear" del drawer, solo en móvil */
-.nav-link-lock {
-  width: 100%; border: none; background: transparent; cursor: pointer;
-  color: var(--red);
-}
 .header-backdrop {
   position: fixed; inset: 0; z-index: 90;
   background: rgba(0,40,85,.35);
@@ -129,7 +126,10 @@
 /* ── Header en móvil: nav como drawer desplegable ── */
 @media (max-width: 900px) {
   .header-menu-btn { display: inline-flex; }
-  .header-lock-btn { display: none; }   /* se usa el "Bloquear" del drawer */
+
+  /* Botón bloquear: solo el candado en móvil para optimizar espacio */
+  .header-lock-btn { padding: 0; width: 44px; height: 44px; justify-content: center; }
+  .header-lock-btn span { display: none; }
 
   .header-nav {
     position: absolute; top: 100%; left: 0; right: 0; z-index: 95;
@@ -150,12 +150,6 @@
     width: 100%; justify-content: flex-start; gap: 12px;
     padding: 13px 16px; border-radius: 12px; font-size: .95rem;
   }
-  .nav-lock-item {
-    display: block; margin-top: 6px; padding-top: 10px;
-    border-top: 1px solid var(--gray-200);
-  }
-  .nav-link-lock { justify-content: flex-start; gap: 12px; padding: 13px 16px; border-radius: 12px; font-size: .95rem; }
-  .nav-link-lock:hover { background: var(--red-light); color: var(--red); }
 }
 
 /* ══════════════════════════════════════════
