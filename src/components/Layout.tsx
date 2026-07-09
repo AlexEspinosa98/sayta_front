@@ -1,5 +1,6 @@
-import { NavLink, Outlet } from 'react-router-dom'
-import { BookOpen, Home, Library, Activity, Tag, Unlock, Languages } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { BookOpen, Home, Library, Activity, Tag, Unlock, Languages, Menu, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 const ESCUDO = '/Assets/logos/unimagdalena-escudo.png'
@@ -7,6 +8,25 @@ const SAYTA_LOGO = '/Assets/logos/sayta-logo.svg'
 
 export default function Layout() {
   const { isUnlocked, lock } = useAuth()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const location = useLocation()
+
+  const closeMenu = () => setMenuOpen(false)
+
+  // Cerrar el menú al cambiar de ruta
+  useEffect(() => { setMenuOpen(false) }, [location.pathname])
+
+  // Cerrar con Escape y bloquear scroll de fondo cuando está abierto
+  useEffect(() => {
+    if (!menuOpen) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenuOpen(false) }
+    window.addEventListener('keydown', onKey)
+    document.body.style.overflow = 'hidden'
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = '' }
+  }, [menuOpen])
+
+  const navLinkClass = ({ isActive }: { isActive: boolean }) =>
+    `nav-link${isActive ? ' nav-link-active' : ''}`
 
   return (
     <div className="app">
@@ -43,52 +63,76 @@ export default function Layout() {
             </NavLink>
           </div>
 
-          <nav aria-label="Navegación principal">
+          <nav
+            id="primary-nav"
+            className={`header-nav${menuOpen ? ' is-open' : ''}`}
+            aria-label="Navegación principal"
+          >
             <ul className="nav" role="list">
               <li>
-                <NavLink to="/" end className={({ isActive }) => `nav-link${isActive ? ' nav-link-active' : ''}`}>
-                  <Home size={15} aria-hidden="true" /><span>Inicio</span>
+                <NavLink to="/" end className={navLinkClass} onClick={closeMenu}>
+                  <Home size={16} aria-hidden="true" /><span>Inicio</span>
                 </NavLink>
               </li>
               {isUnlocked && (
                 <>
                   <li>
-                    <NavLink to="/traductor" className={({ isActive }) => `nav-link${isActive ? ' nav-link-active' : ''}`}>
-                      <Languages size={15} aria-hidden="true" /><span>Traductor</span>
+                    <NavLink to="/traductor" className={navLinkClass} onClick={closeMenu}>
+                      <Languages size={16} aria-hidden="true" /><span>Traductor</span>
                     </NavLink>
                   </li>
                   <li>
-                    <NavLink to="/glosario" className={({ isActive }) => `nav-link${isActive ? ' nav-link-active' : ''}`}>
-                      <Library size={15} aria-hidden="true" /><span>Glosario</span>
+                    <NavLink to="/glosario" className={navLinkClass} onClick={closeMenu}>
+                      <Library size={16} aria-hidden="true" /><span>Glosario</span>
                     </NavLink>
                   </li>
                   <li>
-                    <NavLink to="/entrenamiento" className={({ isActive }) => `nav-link${isActive ? ' nav-link-active' : ''}`}>
-                      <Activity size={15} aria-hidden="true" /><span>Entrenamiento</span>
+                    <NavLink to="/entrenamiento" className={navLinkClass} onClick={closeMenu}>
+                      <Activity size={16} aria-hidden="true" /><span>Entrenamiento</span>
                     </NavLink>
                   </li>
                   <li>
-                    <NavLink to="/etiquetado" className={({ isActive }) => `nav-link${isActive ? ' nav-link-active' : ''}`}>
-                      <Tag size={15} aria-hidden="true" /><span>Etiquetado</span>
+                    <NavLink to="/etiquetado" className={navLinkClass} onClick={closeMenu}>
+                      <Tag size={16} aria-hidden="true" /><span>Etiquetado</span>
                     </NavLink>
                   </li>
                 </>
               )}
               <li>
-                <NavLink to="/acerca" className={({ isActive }) => `nav-link${isActive ? ' nav-link-active' : ''}`}>
-                  <BookOpen size={15} aria-hidden="true" /><span>Acerca de</span>
+                <NavLink to="/acerca" className={navLinkClass} onClick={closeMenu}>
+                  <BookOpen size={16} aria-hidden="true" /><span>Acerca de</span>
                 </NavLink>
               </li>
+              {isUnlocked && (
+                <li className="nav-lock-item">
+                  <button className="nav-link nav-link-lock" onClick={() => { lock(); closeMenu() }} type="button">
+                    <Unlock size={16} aria-hidden="true" /><span>Bloquear acceso</span>
+                  </button>
+                </li>
+              )}
             </ul>
           </nav>
 
-          {isUnlocked ? (
-            <button className="header-lock-btn" onClick={lock} title="Bloquear acceso" aria-label="Bloquear acceso">
-              <Unlock size={15} /><span>Bloquear</span>
+          <div className="header-actions">
+            {isUnlocked && (
+              <button className="header-lock-btn" onClick={lock} title="Bloquear acceso" aria-label="Bloquear acceso">
+                <Unlock size={15} aria-hidden="true" /><span>Bloquear</span>
+              </button>
+            )}
+            <button
+              className="header-menu-btn"
+              onClick={() => setMenuOpen(o => !o)}
+              aria-label={menuOpen ? 'Cerrar menú' : 'Abrir menú'}
+              aria-expanded={menuOpen}
+              aria-controls="primary-nav"
+            >
+              {menuOpen ? <X size={22} aria-hidden="true" /> : <Menu size={22} aria-hidden="true" />}
             </button>
-          ) : null}
+          </div>
         </div>
       </header>
+
+      {menuOpen && <div className="header-backdrop" onClick={closeMenu} aria-hidden="true" />}
 
       <main id="main-content" className="main" tabIndex={-1}>
         <Outlet />

@@ -103,6 +103,61 @@
 .nav-link:hover { background: var(--teal-light); color: var(--teal-dark); }
 .nav-link-active { background: var(--teal-light) !important; color: var(--teal-dark) !important; }
 
+/* Acciones del header + hamburguesa */
+.header-nav { display: flex; }
+.header-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.header-menu-btn {
+  display: none;               /* visible solo en móvil */
+  width: 44px; height: 44px; align-items: center; justify-content: center;
+  border: 1px solid var(--gray-200); border-radius: 12px;
+  background: var(--white); color: var(--navy); cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.header-menu-btn:hover { background: var(--teal-light); border-color: var(--teal); color: var(--teal-dark); }
+.nav-lock-item { display: none; }   /* el "Bloquear" del drawer, solo en móvil */
+.nav-link-lock {
+  width: 100%; border: none; background: transparent; cursor: pointer;
+  color: var(--red);
+}
+.header-backdrop {
+  position: fixed; inset: 0; z-index: 90;
+  background: rgba(0,40,85,.35);
+  -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+  animation: trxKbExpand .2s ease;
+}
+
+/* ── Header en móvil: nav como drawer desplegable ── */
+@media (max-width: 900px) {
+  .header-menu-btn { display: inline-flex; }
+  .header-lock-btn { display: none; }   /* se usa el "Bloquear" del drawer */
+
+  .header-nav {
+    position: absolute; top: 100%; left: 0; right: 0; z-index: 95;
+    display: block;
+    background: rgba(255,255,255,.98);
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--gray-200);
+    box-shadow: 0 24px 48px -24px rgba(0,40,85,.4);
+    padding: 10px clamp(12px, 4vw, 24px) 16px;
+    max-height: calc(100vh - 60px); overflow-y: auto;
+    transform: translateY(-10px); opacity: 0; visibility: hidden; pointer-events: none;
+    transition: opacity .22s ease, transform .22s ease, visibility .22s;
+  }
+  .header-nav.is-open { transform: translateY(0); opacity: 1; visibility: visible; pointer-events: auto; }
+
+  .header-nav .nav { flex-direction: column; gap: 4px; align-items: stretch; }
+  .header-nav .nav-link {
+    width: 100%; justify-content: flex-start; gap: 12px;
+    padding: 13px 16px; border-radius: 12px; font-size: .95rem;
+  }
+  .nav-lock-item {
+    display: block; margin-top: 6px; padding-top: 10px;
+    border-top: 1px solid var(--gray-200);
+  }
+  .nav-link-lock { justify-content: flex-start; gap: 12px; padding: 13px 16px; border-radius: 12px; font-size: .95rem; }
+  .nav-link-lock:hover { background: var(--red-light); color: var(--red); }
+}
+
 /* ══════════════════════════════════════════
    PÁGINA DEL TRADUCTOR (HOME)
 ══════════════════════════════════════════ */
@@ -571,16 +626,17 @@ a.contact-card .contact-card-icon { background: var(--blue); color: var(--white)
 }
 
 @media (max-width: 480px) {
-  .tc-top { flex-direction: column; }
-  .lang-selector { width: 100%; }
-  .lang-pill { flex: 1; text-align: center; }
-  .mode-pills { width: 100%; }
-  .mode-pill  { flex: 1; justify-content: center; }
-  .tc-audio   { flex-direction: column; align-items: stretch; }
-  .audio-record-btn,
-  .audio-upload-btn { justify-content: center; }
-  .audio-or   { text-align: center; }
-  .footer-logos { gap: 12px; }
+  .footer-logos { gap: 14px; }
+
+  /* Traductor en pantallas pequeñas */
+  .trx-card { border-radius: 18px; padding: 18px 14px; }
+  .trx-langbar { gap: 8px; }
+  .trx-chip { max-width: 38vw; padding: 10px 14px; font-size: .9rem; }
+  .trx-swap { width: 42px; height: 42px; }
+  .trx-panel { padding: 18px 16px; min-height: 170px; }
+  .trx-target-term { font-size: 1.4rem; }
+  .trx-rec-btn, .trx-upload-btn { flex: 1; justify-content: center; }
+  .trx-menu { min-width: 240px; }
 }
 
 /* Movimiento reducido */
