@@ -13,6 +13,7 @@ import Etiquetado from './pages/Etiquetado'
 import Glosario from './pages/Glosario'
 import Entrenamiento from './pages/Entrenamiento'
 import Usuarios from './pages/admin/Usuarios'
+import RolesPermisos from './pages/admin/RolesPermisos'
 
 export default function App() {
   return (
@@ -41,6 +42,9 @@ export default function App() {
           </Route>
           <Route element={<RequireAuth check={p => p.usuarios.gestionar} />}>
             <Route path="/admin/usuarios" element={<Usuarios />} />
+            <Route path="/admin/roles" element={<RolesPermisos />} />
+            <Route path="/admin/permisos" element={<RolesPermisos />} />
+            <Route path="/admin/roles-permisos" element={<RolesPermisos />} />
           </Route>
         </Route>
       </Routes>

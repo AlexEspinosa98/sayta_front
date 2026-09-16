@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { BookOpen, Home, Library, Activity, Tag, LogOut, LogIn, Languages, Menu, X, Users } from 'lucide-react'
+import { BookOpen, Home, Library, Activity, Tag, LogOut, LogIn, Languages, Menu, X, Users, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 const ESCUDO = '/Assets/logos/unimagdalena-escudo.png'
@@ -104,11 +104,18 @@ export default function Layout() {
                 </li>
               )}
               {isAuthenticated && permissions.usuarios.gestionar && (
-                <li>
-                  <NavLink to="/admin/usuarios" className={navLinkClass} onClick={closeMenu}>
-                    <Users size={16} aria-hidden="true" /><span>Usuarios</span>
-                  </NavLink>
-                </li>
+                <>
+                  <li>
+                    <NavLink to="/admin/usuarios" className={navLinkClass} onClick={closeMenu}>
+                      <Users size={16} aria-hidden="true" /><span>Usuarios</span>
+                    </NavLink>
+                  </li>
+                  <li>
+                    <NavLink to="/admin/roles" className={navLinkClass} onClick={closeMenu}>
+                      <ShieldCheck size={16} aria-hidden="true" /><span>Permisos</span>
+                    </NavLink>
+                  </li>
+                </>
               )}
               <li>
                 <NavLink to="/acerca" className={navLinkClass} onClick={closeMenu}>

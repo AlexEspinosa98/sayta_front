@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
+import { NavLink } from 'react-router-dom'
 import {
-  Users, Plus, Edit2, Ban, RotateCcw, X, Loader2, AlertCircle, ShieldCheck,
+  Users, Plus, Edit2, Ban, RotateCcw, X, Loader2, AlertCircle, ShieldCheck, KeyRound,
 } from 'lucide-react'
 import { apiFetch, apiErr } from '../../api'
 import { useAuth } from '../../context/AuthContext'
@@ -15,18 +16,26 @@ interface Usuario {
   is_active: boolean
   rol: string
   rol_display: string
+  etnia?: string | null
+  comunidad?: string | null
   date_joined: string
+}
+
+interface RolOption {
+  codigo: string
+  nombre: string
+  activo: boolean
 }
 
 type RegistroForm = {
   username: string; email: string; password: string
-  first_name: string; last_name: string; rol: string
+  first_name: string; last_name: string; rol: string; etnia: string; comunidad: string
 }
 
 const emptyRegistro = (): RegistroForm =>
-  ({ username: '', email: '', password: '', first_name: '', last_name: '', rol: 'consultor' })
+  ({ username: '', email: '', password: '', first_name: '', last_name: '', rol: 'consultor', etnia: '', comunidad: '' })
 
-type EditForm = { email: string; first_name: string; last_name: string; rol: string; password: string }
+type EditForm = { email: string; first_name: string; last_name: string; rol: string; password: string; etnia: string; comunidad: string }
 
 function roleBadgeClass(rol: string) {
   if (rol === 'admin') return 'gl-badge--red'
@@ -38,6 +47,7 @@ function roleBadgeClass(rol: string) {
 export default function Usuarios() {
   const { user: currentUser } = useAuth()
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
+  const [roles, setRoles]       = useState<RolOption[]>([])
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState('')
 
@@ -47,7 +57,7 @@ export default function Usuarios() {
   const [saving, setSaving]         = useState(false)
 
   const [editing, setEditing]   = useState<Usuario | null>(null)
-  const [editForm, setEditForm] = useState<EditForm>({ email: '', first_name: '', last_name: '', rol: '', password: '' })
+  const [editForm, setEditForm] = useState<EditForm>({ email: '', first_name: '', last_name: '', rol: '', password: '', etnia: '', comunidad: '' })
   const [editErr, setEditErr]   = useState('')
 
   const [confirmDeactivate, setConfirmDeactivate] = useState<Usuario | null>(null)
@@ -56,8 +66,13 @@ export default function Usuarios() {
   const load = useCallback(async () => {
     setLoading(true); setError('')
     try {
-      const data = await apiFetch('/auth/usuarios/') as { total: number; usuarios: Usuario[] }
+      const [data, rolesData] = await Promise.all([
+        apiFetch('/auth/usuarios/') as Promise<{ total: number; usuarios: Usuario[] }>,
+        apiFetch('/admin/roles/') as Promise<RolOption[] | { roles?: RolOption[] }>,
+      ])
       setUsuarios(data.usuarios ?? [])
+      const loadedRoles = Array.isArray(rolesData) ? rolesData : rolesData.roles ?? []
+      setRoles(loadedRoles.filter(r => r.activo))
     } catch (e) {
       setError(apiErr(e, 'No se pudo cargar la lista de usuarios.'))
     } finally { setLoading(false) }
@@ -69,13 +84,23 @@ export default function Usuarios() {
   const closeCreate = () => setShowCreate(false)
 
   const handleCreate = async () => {
-    if (!createForm.username.trim() || !createForm.email.trim() || createForm.password.length < 8) {
-      setCreateErr('Usuario, correo y una contraseña de al menos 8 caracteres son requeridos.')
+    if (!createForm.email.trim() || createForm.password.length < 8) {
+      setCreateErr('Correo y una contraseña de al menos 8 caracteres son requeridos.')
       return
     }
     setSaving(true); setCreateErr('')
     try {
-      await apiFetch('/auth/registro/', { method: 'POST', body: JSON.stringify(createForm) })
+      const body: Record<string, unknown> = {
+        email: createForm.email.trim(),
+        password: createForm.password,
+        first_name: createForm.first_name,
+        last_name: createForm.last_name,
+        rol: createForm.rol,
+        etnia: createForm.etnia || null,
+        comunidad: createForm.comunidad,
+      }
+      if (createForm.username.trim()) body.username = createForm.username.trim()
+      await apiFetch('/auth/registro/', { method: 'POST', body: JSON.stringify(body) })
       closeCreate(); load()
     } catch (e) {
       setCreateErr(apiErr(e, 'Error al registrar el usuario.'))
@@ -83,7 +108,10 @@ export default function Usuarios() {
   }
 
   const openEdit = (u: Usuario) => {
-    setEditForm({ email: u.email, first_name: u.first_name, last_name: u.last_name, rol: u.rol, password: '' })
+    setEditForm({
+      email: u.email, first_name: u.first_name, last_name: u.last_name,
+      rol: u.rol, password: '', etnia: u.etnia ?? '', comunidad: u.comunidad ?? '',
+    })
     setEditErr(''); setEditing(u)
   }
   const closeEdit = () => setEditing(null)
@@ -95,6 +123,7 @@ export default function Usuarios() {
       const body: Record<string, unknown> = {
         email: editForm.email, first_name: editForm.first_name,
         last_name: editForm.last_name, rol: editForm.rol,
+        etnia: editForm.etnia || null, comunidad: editForm.comunidad,
       }
       if (editForm.password.trim()) body.password = editForm.password.trim()
       await apiFetch(`/auth/usuarios/${editing.id}/`, { method: 'PATCH', body: JSON.stringify(body) })
@@ -122,12 +151,29 @@ export default function Usuarios() {
     } catch (e) { setError(apiErr(e, 'Error al reactivar el usuario.')) }
   }
 
+  const roleOptions = roles.length > 0
+    ? roles.map(r => ({ value: r.codigo, label: r.nombre }))
+    : ROLES_REGISTRABLES
+
   return (
     <div className="gl-page">
       <div className="gl-page-header">
         <div className="container">
           <h1 className="gl-page-title"><Users size={22} style={{ verticalAlign: 'middle', marginRight: 8 }} />Administración de usuarios</h1>
           <p className="gl-page-sub">Registro y gestión de cuentas y roles del sistema SAYTA</p>
+        </div>
+      </div>
+
+      <div className="gl-tabs-bar">
+        <div className="container">
+          <div className="gl-tabs" role="tablist" aria-label="Administración">
+            <NavLink to="/admin/usuarios" className={({ isActive }) => `gl-tab ${isActive ? 'gl-tab--active' : ''}`}>
+              <Users size={15} /> Usuarios
+            </NavLink>
+            <NavLink to="/admin/roles" className={({ isActive }) => `gl-tab ${isActive ? 'gl-tab--active' : ''}`}>
+              <KeyRound size={15} /> Roles y permisos
+            </NavLink>
+          </div>
         </div>
       </div>
 
@@ -206,7 +252,7 @@ export default function Usuarios() {
               <button className="vk-floating-close" onClick={closeCreate} type="button"><X size={18} /></button>
             </div>
             <div className="gl-modal-body">
-              <div className="gl-field"><label className="gl-field-label">Usuario *</label>
+              <div className="gl-field"><label className="gl-field-label">Usuario <span className="gl-field-hint">(opcional; se genera desde el correo)</span></label>
                 <input className="gl-input" value={createForm.username} onChange={e => setCreateForm({ ...createForm, username: e.target.value })} /></div>
               <div className="gl-field"><label className="gl-field-label">Correo *</label>
                 <input className="gl-input" type="email" value={createForm.email} onChange={e => setCreateForm({ ...createForm, email: e.target.value })} /></div>
@@ -220,8 +266,18 @@ export default function Usuarios() {
               </div>
               <div className="gl-field"><label className="gl-field-label">Rol *</label>
                 <select className="gl-select gl-input" value={createForm.rol} onChange={e => setCreateForm({ ...createForm, rol: e.target.value })}>
-                  {ROLES_REGISTRABLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                  {roleOptions.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                 </select>
+              </div>
+              <div className="gl-form-row">
+                <div className="gl-field"><label className="gl-field-label">Etnia</label>
+                  <select className="gl-select gl-input" value={createForm.etnia} onChange={e => setCreateForm({ ...createForm, etnia: e.target.value })}>
+                    <option value="">No aplica</option>
+                    <option value="arhuaco">Arhuaco</option>
+                    <option value="kogui">Kogui</option>
+                  </select></div>
+                <div className="gl-field"><label className="gl-field-label">Comunidad</label>
+                  <input className="gl-input" value={createForm.comunidad} onChange={e => setCreateForm({ ...createForm, comunidad: e.target.value })} /></div>
               </div>
               {createErr && <div className="gl-form-err"><AlertCircle size={14} />{createErr}</div>}
             </div>
@@ -254,8 +310,18 @@ export default function Usuarios() {
               </div>
               <div className="gl-field"><label className="gl-field-label">Rol</label>
                 <select className="gl-select gl-input" value={editForm.rol} onChange={e => setEditForm({ ...editForm, rol: e.target.value })}>
-                  {ROLES_REGISTRABLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                  {roleOptions.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                 </select>
+              </div>
+              <div className="gl-form-row">
+                <div className="gl-field"><label className="gl-field-label">Etnia</label>
+                  <select className="gl-select gl-input" value={editForm.etnia} onChange={e => setEditForm({ ...editForm, etnia: e.target.value })}>
+                    <option value="">No aplica</option>
+                    <option value="arhuaco">Arhuaco</option>
+                    <option value="kogui">Kogui</option>
+                  </select></div>
+                <div className="gl-field"><label className="gl-field-label">Comunidad</label>
+                  <input className="gl-input" value={editForm.comunidad} onChange={e => setEditForm({ ...editForm, comunidad: e.target.value })} /></div>
               </div>
               <div className="gl-field"><label className="gl-field-label" >Nueva contraseña</label>
                 <input className="gl-input" type="password" value={editForm.password} onChange={e => setEditForm({ ...editForm, password: e.target.value })} placeholder="dejar vacío para no cambiar" /></div>
