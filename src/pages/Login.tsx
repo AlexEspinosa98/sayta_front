@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate, useLocation, Link } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Lock, Eye, EyeOff, AlertCircle, LogIn } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
@@ -87,10 +87,6 @@ export default function Login() {
             <LogIn size={15} aria-hidden="true" /> {loading ? 'Ingresando…' : 'Ingresar'}
           </button>
         </form>
-
-        <p className="ent-hint" style={{ marginTop: 16, textAlign: 'center' }}>
-          ¿Primer despliegue sin administrador? <Link to="/setup">Crear el administrador inicial</Link>
-        </p>
       </div>
     </div>
   )

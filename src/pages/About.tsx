@@ -1,7 +1,7 @@
 import {
   Mic2, FileText, BookMarked, Users, Globe, ShieldCheck,
   Smartphone, Cpu, GraduationCap, Lightbulb,
-  Mail, MapPin, ExternalLink, Award,
+  Mail, MapPin, ExternalLink, Award, Landmark, Leaf,
 } from 'lucide-react'
 
 const ESCUDO = '/Assets/logos/unimagdalena-escudo.png'
@@ -21,6 +21,12 @@ const researchLines = [
   { icon: <Cpu size={18} aria-hidden="true" />,           label: 'Desarrollo Electrónico' },
   { icon: <GraduationCap size={18} aria-hidden="true" />, label: 'Docencia en Telecomunicaciones' },
   { icon: <Lightbulb size={18} aria-hidden="true" />,     label: 'Gestión e Innovación Tecnológica' },
+]
+
+const citsEjes = [
+  { icon: <Users size={18} aria-hidden="true" />, label: 'Interculturalidad', desc: 'Diálogo entre culturas y saberes diversos, fortaleciendo la inclusión y la participación.' },
+  { icon: <MapPin size={18} aria-hidden="true" />, label: 'Territorio', desc: 'Reconocimiento, protección y gestión sostenible de territorios y comunidades.' },
+  { icon: <Leaf size={18} aria-hidden="true" />,   label: 'Sostenibilidad', desc: 'Proyectos de conservación ambiental e innovación social.' },
 ]
 
 const objectives = [
@@ -175,6 +181,60 @@ export default function About() {
                   <li key={i}>{obj}</li>
                 ))}
               </ol>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── CITS ──────────────────────────────────────────────── */}
+      <section className="section cits-section" aria-labelledby="cits-heading">
+        <div className="container">
+          <div className="gideam-header">
+            <div className="gideam-logo-wrap" aria-hidden="true">
+              <Landmark size={56} color="var(--blue)" />
+            </div>
+            <div className="gideam-meta">
+              <h2 id="cits-heading" className="section-title section-title-left">
+                Centro de Interculturalidad, Territorio y Sostenibilidad (CITS)
+              </h2>
+              <p className="gideam-lead">
+                SAYTA se articula con el <strong>Centro de Interculturalidad, Territorio y Sostenibilidad (CITS)</strong>{' '}
+                de la Universidad del Magdalena, un centro académico dedicado al trabajo colaborativo con
+                comunidades, organizaciones e instituciones locales bajo el lema{' '}
+                <em>"Interculturalidad para transformar territorios y construir futuros sostenibles"</em>.
+              </p>
+              <a
+                href="https://cits.unimagdalena.edu.co/"
+                target="_blank"
+                rel="noreferrer"
+                className="gideam-link"
+                aria-label="Visitar el sitio del CITS (abre en nueva pestaña)"
+              >
+                <ExternalLink size={14} aria-hidden="true" />
+                cits.unimagdalena.edu.co
+              </a>
+            </div>
+          </div>
+
+          <div className="gideam-body">
+            <div className="gideam-block">
+              <h3 className="gideam-block-title">Tres ejes de trabajo</h3>
+              <ul className="research-lines" role="list">
+                {citsEjes.map(e => (
+                  <li key={e.label} className="research-line">
+                    <span className="research-line-icon">{e.icon}</span>
+                    {e.label}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="gideam-block">
+              <h3 className="gideam-block-title">Impacto registrado</h3>
+              <ul className="objectives-list">
+                <li>+12.300 personas beneficiadas mediante diagnósticos comunitarios.</li>
+                <li>27 diagnósticos comunitarios realizados.</li>
+                <li>Más de 51 eventos y actividades comunitarias.</li>
+              </ul>
             </div>
           </div>
         </div>
