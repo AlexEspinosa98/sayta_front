@@ -5,14 +5,16 @@ export const TOKEN_KEY = 'sayta_token'
 type UnauthorizedHandler = () => void
 let onUnauthorized: UnauthorizedHandler | null = null
 
+type ApiFetchOptions = RequestInit & { auth?: boolean }
+
 /** Registrado por AuthProvider al montar — se dispara ante cualquier 401. */
 export function setUnauthorizedHandler(fn: UnauthorizedHandler | null) {
   onUnauthorized = fn
 }
 
-export async function apiFetch(path: string, opts?: RequestInit) {
+export async function apiFetch(path: string, opts?: ApiFetchOptions) {
   const isForm = opts?.body instanceof FormData
-  const token = localStorage.getItem(TOKEN_KEY)
+  const token = opts?.auth === false ? null : localStorage.getItem(TOKEN_KEY)
 
   const headers: Record<string, string> = {
     Accept: 'application/json',
@@ -21,7 +23,8 @@ export async function apiFetch(path: string, opts?: RequestInit) {
     ...(opts?.headers as Record<string, string> ?? {}),
   }
 
-  const res  = await fetch(`${API_BASE}${path}`, { ...opts, headers })
+  const { auth: _auth, ...fetchOpts } = opts ?? {}
+  const res  = await fetch(`${API_BASE}${path}`, { ...fetchOpts, headers })
 
   if (res.status === 401) {
     onUnauthorized?.()

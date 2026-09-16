@@ -17,7 +17,13 @@ export interface Permissions {
   usuarios: { gestionar: boolean }
 }
 
-const NONE: Permissions = {
+export type DynamicPermissionInput =
+  | string[]
+  | Array<{ modulo?: string; modulo_codigo?: string; accion?: string; codigo?: string; permiso?: string }>
+  | Record<string, unknown>
+
+function emptyPermissions(): Permissions {
+  return {
   glosario: { leer: false, crear: false, editar: false, eliminar: false, cargaMasiva: false },
   embeddings: { leer: false, generarActivar: false },
   datasetAudio: { leer: false, subir: false, etiquetar: false },
@@ -28,7 +34,10 @@ const NONE: Permissions = {
   transcripcion: false,
   traduccion: false,
   usuarios: { gestionar: false },
+  }
 }
+
+const NONE: Permissions = emptyPermissions()
 
 const GESTOR: Permissions = {
   glosario: { leer: true, crear: true, editar: true, eliminar: true, cargaMasiva: true },
@@ -113,5 +122,122 @@ export const ROLES_REGISTRABLES: { value: string; label: string }[] = [
  */
 export function getPermissions(rol: string | null | undefined): Permissions {
   if (!rol) return NONE
-  return ROLE_MATRIX_RESOLVED[rol] ?? CONSULTOR
+  return ROLE_MATRIX_RESOLVED[rol] ?? NONE
+}
+
+function normalizeModulo(modulo: string) {
+  return modulo.replace(/-/g, '_')
+}
+
+function applyPermission(target: Permissions, moduloRaw: string, actionRaw: string) {
+  const modulo = normalizeModulo(moduloRaw)
+  const action = actionRaw.replace(/-/g, '_')
+
+  if (modulo === 'glosario') {
+    if (action === 'ver' || action === 'leer') target.glosario.leer = true
+    if (action === 'crear') target.glosario.crear = true
+    if (action === 'editar') target.glosario.editar = true
+    if (action === 'eliminar') target.glosario.eliminar = true
+    if (action === 'carga_masiva') target.glosario.cargaMasiva = true
+  }
+
+  if (modulo === 'embeddings') {
+    if (action === 'ver' || action === 'leer') target.embeddings.leer = true
+    if (['generar_activar', 'generar', 'activar'].includes(action)) target.embeddings.generarActivar = true
+  }
+
+  if (modulo === 'dataset_audio') {
+    if (action === 'ver' || action === 'leer') target.datasetAudio.leer = true
+    if (action === 'subir') target.datasetAudio.subir = true
+    if (action === 'etiquetar') target.datasetAudio.etiquetar = true
+  }
+
+  if (modulo === 'modelos_asr') {
+    if (action === 'ver' || action === 'leer') target.modelosAsr.leer = true
+    if (action === 'descargar') target.modelosAsr.descargar = true
+    if (action === 'entrenar') target.modelosAsr.entrenar = true
+    if (['activar_cancelar', 'activar', 'cancelar'].includes(action)) target.modelosAsr.activarCancelar = true
+    if (action === 'liberar_memoria') target.modelosAsr.liberarMemoria = true
+    if (action === 'ver_progreso') target.modelosAsr.verProgreso = true
+    if (action === 'reiniciar_backend') target.modelosAsr.reiniciarBackend = true
+  }
+
+  if (modulo === 'transcripcion' && ['ejecutar', 'ver', 'leer'].includes(action)) {
+    target.transcripcion = true
+  }
+
+  if (modulo === 'traduccion' && ['ejecutar', 'ver', 'leer'].includes(action)) {
+    target.traduccion = true
+  }
+
+  if (modulo === 'usuarios' && ['gestionar_roles', 'gestionar', 'ver', 'leer'].includes(action)) {
+    target.usuarios.gestionar = true
+  }
+}
+
+function permissionsFromList(permisos: DynamicPermissionInput): Permissions | null {
+  if (!Array.isArray(permisos)) return null
+
+  const parsed = emptyPermissions()
+  let found = false
+
+  for (const item of permisos) {
+    if (typeof item === 'string') {
+      const [modulo, action] = item.split('.')
+      if (modulo && action) {
+        applyPermission(parsed, modulo, action)
+        found = true
+      }
+      continue
+    }
+
+    const modulo = item.modulo_codigo ?? item.modulo
+    const action = item.codigo ?? item.accion ?? item.permiso
+    if (modulo && action) {
+      applyPermission(parsed, modulo, action)
+      found = true
+    }
+  }
+
+  return found ? parsed : null
+}
+
+function permissionsFromObject(permisos: DynamicPermissionInput): Permissions | null {
+  if (Array.isArray(permisos) || typeof permisos !== 'object' || permisos === null) return null
+
+  const parsed = emptyPermissions()
+  let found = false
+
+  Object.entries(permisos).forEach(([modulo, actions]) => {
+    if (Array.isArray(actions)) {
+      actions.forEach(action => {
+        if (typeof action === 'string') {
+          applyPermission(parsed, modulo, action)
+          found = true
+        }
+      })
+      return
+    }
+
+    if (typeof actions === 'object' && actions !== null) {
+      Object.entries(actions as Record<string, unknown>).forEach(([action, enabled]) => {
+        if (enabled) {
+          applyPermission(parsed, modulo, action)
+          found = true
+        }
+      })
+    }
+  })
+
+  return found ? parsed : null
+}
+
+export function resolvePermissions(
+  rol: string | null | undefined,
+  permisos?: DynamicPermissionInput,
+): Permissions {
+  if (permisos) {
+    return permissionsFromList(permisos) ?? permissionsFromObject(permisos) ?? getPermissions(rol)
+  }
+  return getPermissions(rol)
 }

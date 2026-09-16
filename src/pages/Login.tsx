@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { Lock, Eye, EyeOff, AlertCircle, LogIn } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
@@ -16,10 +16,11 @@ export default function Login() {
 
   const from: string = (location.state as { from?: string } | null)?.from ?? '/'
 
-  if (isAuthenticated) {
-    navigate(from, { replace: true })
-    return null
-  }
+  useEffect(() => {
+    if (isAuthenticated) navigate(from, { replace: true })
+  }, [from, isAuthenticated, navigate])
+
+  if (isAuthenticated) return null
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -49,7 +50,7 @@ export default function Login() {
             type="text"
             value={username}
             onChange={e => { setUsername(e.target.value); setError('') }}
-            placeholder="Usuario"
+            placeholder="Usuario o correo"
             className="eg-gate-input"
             autoFocus
             autoComplete="username"

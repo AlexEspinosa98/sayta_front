@@ -26,6 +26,7 @@ export default function Setup() {
     try {
       const data = await apiFetch('/auth/setup/', {
         method: 'POST',
+        auth: false,
         body: JSON.stringify(form),
       }) as { token: string }
       localStorage.setItem('sayta_token', data.token)

@@ -90,7 +90,14 @@
 .nav {
   display: flex; gap: 4px;
   list-style: none; padding: 0; margin: 0;
+  /* si no caben todos los ítems (más roles = más ítems + badge de usuario),
+     el nav se desplaza horizontalmente en vez de apretujarse contra las
+     acciones del header */
+  overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: none; -ms-overflow-style: none;
 }
+.nav::-webkit-scrollbar { display: none; }
+.nav > li { flex-shrink: 0; }
 .nav-link {
   display: flex; align-items: center; gap: 6px;
   color: var(--gray-500); text-decoration: none;
@@ -98,6 +105,7 @@
   font-size: .86rem; font-weight: 600;
   padding: 8px 14px; border-radius: 10px;
   min-height: 44px;                    /* touch target mínimo */
+  white-space: nowrap;
   transition: background .15s, color .15s;
 }
 .nav-link:hover { background: var(--teal-light); color: var(--teal-dark); }
@@ -106,7 +114,14 @@
 /* Acciones del header + hamburguesa */
 .header-inner > * { min-width: 0; }
 .header-brand { flex-shrink: 1; overflow: hidden; }
-.header-nav { display: flex; }
+.header-nav {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  justify-content: center;
+}
+.header-nav .nav { max-width: 100%; }
 .header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .header-user-badge {
   font-size: .78rem; font-weight: 600; color: var(--gray-500);

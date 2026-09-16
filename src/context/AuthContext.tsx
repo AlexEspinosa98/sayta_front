@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
 import { apiFetch, apiErr, setUnauthorizedHandler, TOKEN_KEY } from '../api'
-import { getPermissions, type Permissions } from '../permissions'
+import { resolvePermissions, type DynamicPermissionInput, type Permissions } from '../permissions'
 
 const USER_KEY = 'sayta_user'
 
@@ -14,6 +14,7 @@ export interface Usuario {
   rol: string
   rol_display: string
   date_joined: string
+  permisos?: DynamicPermissionInput
 }
 
 interface AuthContextType {
@@ -82,9 +83,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (username: string, password: string) => {
     try {
+      const identifier = username.trim()
+      const loginPayload = identifier.includes('@')
+        ? { email: identifier, password }
+        : { username: identifier, password }
       const data = await apiFetch('/auth/login/', {
         method: 'POST',
-        body: JSON.stringify({ username, password }),
+        auth: false,
+        body: JSON.stringify(loginPayload),
       }) as { token: string; usuario: Usuario }
       persistSession(data.token, data.usuario)
     } catch (e) {
@@ -106,7 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value: AuthContextType = {
     user, token, loading,
-    permissions: getPermissions(user?.rol),
+    permissions: resolvePermissions(user?.rol, user?.permisos),
     isAuthenticated: Boolean(user && token),
     login, logout, refreshProfile,
   }

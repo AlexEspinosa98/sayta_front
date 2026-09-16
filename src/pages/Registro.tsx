@@ -29,6 +29,7 @@ export default function Registro() {
     try {
       const data = await apiFetch('/auth/registro-publico/', {
         method: 'POST',
+        auth: false,
         body: JSON.stringify(form),
       }) as { token?: string }
       setDone(true)

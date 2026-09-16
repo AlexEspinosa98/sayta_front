@@ -9,7 +9,7 @@ import {
   useSpecialKeyboard, SpecialKeyboardPanel, SpecialKeyboardToggle,
 } from '../components/SpecialKeyboard'
 import { useAudioRecorder } from '../hooks/useAudioRecorder'
-import { API_BASE } from '../api'
+import { apiErr, apiFetch } from '../api'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -97,12 +97,9 @@ export default function Traductor() {
   const kb = useSpecialKeyboard(textareaRef, inputText, setInputText)
 
   useEffect(() => {
-    fetch(`${API_BASE}/terminos/lenguas/?page_size=50`, {
-      headers: { Accept: 'application/json' },
-    })
-      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+    apiFetch('/terminos/lenguas/?page_size=50')
       .then(d => {
-        const raw = d.results ?? d
+        const raw = Array.isArray(d) ? d : (d as { results?: unknown }).results ?? d
         const list: Lengua[] = Array.isArray(raw) ? raw : []
         setLenguas(list)
         if (list.length > 0) setLenguaId(list[0].id)
@@ -142,33 +139,25 @@ export default function Traductor() {
 
     try {
       if (inputMode === 'text') {
-        const res = await fetch(`${API_BASE}/traduccion/traducir/`, {
+        const data = await apiFetch('/traduccion/traducir/', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
           body: JSON.stringify({ texto: inputText.trim(), lengua_id: lenguaId, direccion }),
-        })
-        const data = await res.json()
-        if (!res.ok) {
-          setApiError(data.error || data.direccion?.[0] || data.texto?.[0] || data.lengua_id?.[0] || `Error ${res.status}`)
-        } else {
-          const resultados: ResultadoItem[] = Array.isArray(data.resultados) ? data.resultados : []
-          setResult({ ...data, resultados })
-          const best = resultados.findIndex(r => r.mejor_coincidencia)
-          setSelectedIdx(best >= 0 ? best : 0)
-        }
+        }) as TraduccionResponse
+        const resultados: ResultadoItem[] = Array.isArray(data.resultados) ? data.resultados : []
+        setResult({ ...data, resultados })
+        const best = resultados.findIndex(r => r.mejor_coincidencia)
+        setSelectedIdx(best >= 0 ? best : 0)
       } else {
         const fd = new FormData()
         fd.append('lengua_id', String(lenguaId))
         fd.append('audio', rec.audioFile!)
         fd.append('direccion', 'lengua_a_es')
-        const res = await fetch(`${API_BASE}/entrenamiento/transcribir-y-traducir/`, {
+        const data = await apiFetch('/entrenamiento/transcribir-y-traducir/', {
           method: 'POST',
-          headers: { Accept: 'application/json' },
           body: fd,
-        })
-        const data: TranscripcionResponse = await res.json()
-        if (!res.ok || data.error) {
-          setApiError(data.error ?? `Error ${res.status}`)
+        }) as TranscripcionResponse
+        if (data.error) {
+          setApiError(data.error)
         } else {
           setTranscripcion(data.transcripcion ?? null)
           if (data.traduccion?.resultados && data.traduccion.conclusion) {
@@ -189,8 +178,8 @@ export default function Traductor() {
           }
         }
       }
-    } catch {
-      setApiError('No se pudo conectar con el servidor.')
+    } catch (e) {
+      setApiError(apiErr(e, 'No se pudo conectar con el servidor.'))
     } finally { setIsLoading(false) }
   }
 
