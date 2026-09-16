@@ -464,6 +464,11 @@
 /* ── GIDEAM ───────────────────────────── */
 .gideam-section { background: var(--off-white); }
 .cits-section { background: var(--white); }
+.cits-logo-wrap {
+  background: linear-gradient(145deg, var(--blue) 0%, var(--blue-dark) 100%) !important;
+  border-color: transparent !important;
+}
+.cits-logo { width: clamp(140px, 20vw, 200px); height: auto; object-fit: contain; }
 .gideam-header {
   display: grid;
   grid-template-columns: auto 1fr;

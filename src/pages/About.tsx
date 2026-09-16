@@ -1,11 +1,12 @@
 import {
   Mic2, FileText, BookMarked, Users, Globe, ShieldCheck,
   Smartphone, Cpu, GraduationCap, Lightbulb,
-  Mail, MapPin, ExternalLink, Award, Landmark, Leaf,
+  Mail, MapPin, ExternalLink, Award, Leaf,
 } from 'lucide-react'
 
 const ESCUDO = '/Assets/logos/unimagdalena-escudo.png'
 const SAYTA_LOGO = '/Assets/logos/sayta-logo.svg'
+const CITS_LOGO = '/Assets/logo-cits.png'
 
 const features = [
   { icon: <Mic2 size={22} aria-hidden="true" />,       title: 'Reconocimiento de voz',    desc: 'Captura audio en Arhuaco o Kogui y lo convierte en texto para su traducción automática.' },
@@ -190,8 +191,8 @@ export default function About() {
       <section className="section cits-section" aria-labelledby="cits-heading">
         <div className="container">
           <div className="gideam-header">
-            <div className="gideam-logo-wrap" aria-hidden="true">
-              <Landmark size={56} color="var(--blue)" />
+            <div className="gideam-logo-wrap cits-logo-wrap" aria-hidden="true">
+              <img src={CITS_LOGO} alt="" className="cits-logo" />
             </div>
             <div className="gideam-meta">
               <h2 id="cits-heading" className="section-title section-title-left">
