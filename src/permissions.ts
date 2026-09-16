@@ -1,13 +1,17 @@
 // Matriz de permisos por rol — refleja la tabla documentada en las Historias de
-// Usuario del sistema de autenticación. El backend es la autoridad real (todo
-// se re-valida ahí y responde 403 si corresponde); esta matriz solo controla
-// qué ve/puede intentar el usuario en la interfaz.
+// Usuario del sistema de autenticación (Épica 7) y de monitoreo (Épica 9). El
+// backend es la autoridad real (todo se re-valida ahí y responde 403 si
+// corresponde); esta matriz solo controla qué ve/puede intentar el usuario
+// en la interfaz.
 
 export interface Permissions {
   glosario: { leer: boolean; crear: boolean; editar: boolean; eliminar: boolean; cargaMasiva: boolean }
   embeddings: { leer: boolean; generarActivar: boolean }
   datasetAudio: { leer: boolean; subir: boolean; etiquetar: boolean }
-  modelosAsr: { leer: boolean; descargar: boolean; entrenar: boolean; activarCancelar: boolean; liberarMemoria: boolean }
+  modelosAsr: {
+    leer: boolean; descargar: boolean; entrenar: boolean; activarCancelar: boolean
+    liberarMemoria: boolean; verProgreso: boolean; reiniciarBackend: boolean
+  }
   transcripcion: boolean
   traduccion: boolean
   usuarios: { gestionar: boolean }
@@ -17,7 +21,10 @@ const NONE: Permissions = {
   glosario: { leer: false, crear: false, editar: false, eliminar: false, cargaMasiva: false },
   embeddings: { leer: false, generarActivar: false },
   datasetAudio: { leer: false, subir: false, etiquetar: false },
-  modelosAsr: { leer: false, descargar: false, entrenar: false, activarCancelar: false, liberarMemoria: false },
+  modelosAsr: {
+    leer: false, descargar: false, entrenar: false, activarCancelar: false,
+    liberarMemoria: false, verProgreso: false, reiniciarBackend: false,
+  },
   transcripcion: false,
   traduccion: false,
   usuarios: { gestionar: false },
@@ -27,7 +34,10 @@ const GESTOR: Permissions = {
   glosario: { leer: true, crear: true, editar: true, eliminar: true, cargaMasiva: true },
   embeddings: { leer: true, generarActivar: true },
   datasetAudio: { leer: true, subir: true, etiquetar: true },
-  modelosAsr: { leer: true, descargar: true, entrenar: true, activarCancelar: true, liberarMemoria: true },
+  modelosAsr: {
+    leer: true, descargar: true, entrenar: true, activarCancelar: true,
+    liberarMemoria: true, verProgreso: true, reiniciarBackend: false,
+  },
   transcripcion: true,
   traduccion: true,
   usuarios: { gestionar: false },
@@ -37,7 +47,10 @@ const ANOTADOR: Permissions = {
   ...GESTOR,
   glosario: { leer: true, crear: false, editar: false, eliminar: false, cargaMasiva: false },
   embeddings: { leer: true, generarActivar: false },
-  modelosAsr: { leer: true, descargar: false, entrenar: false, activarCancelar: false, liberarMemoria: false },
+  modelosAsr: {
+    leer: true, descargar: false, entrenar: false, activarCancelar: false,
+    liberarMemoria: false, verProgreso: true, reiniciarBackend: false,
+  },
 }
 
 const CONSULTOR: Permissions = {
@@ -58,6 +71,11 @@ const COLABORADOR_LENGUA: Permissions = {
   datasetAudio: { leer: true, subir: false, etiquetar: true },
 }
 
+// Rol por defecto del auto-registro público (`POST /api/auth/registro-publico/`).
+// Cero permisos — solo puede loguearse y ver su propio perfil, hasta que un
+// admin le asigne un rol real.
+const PENDIENTE: Permissions = { ...NONE }
+
 export const ROLE_MATRIX: Record<string, Permissions> = {
   admin: GESTOR,
   desarrollador: GESTOR,
@@ -65,12 +83,17 @@ export const ROLE_MATRIX: Record<string, Permissions> = {
   anotador: ANOTADOR,
   consultor: CONSULTOR,
   colaborador_lengua: COLABORADOR_LENGUA,
+  pendiente: PENDIENTE,
 }
 
-// admin es el único con gestión de usuarios/roles.
+// admin es el único con gestión de usuarios/roles y con permiso de reiniciar el backend.
 export const ROLE_MATRIX_RESOLVED: Record<string, Permissions> = {
   ...ROLE_MATRIX,
-  admin: { ...GESTOR, usuarios: { gestionar: true } },
+  admin: {
+    ...GESTOR,
+    modelosAsr: { ...GESTOR.modelosAsr, reiniciarBackend: true },
+    usuarios: { gestionar: true },
+  },
 }
 
 export const ROLES_REGISTRABLES: { value: string; label: string }[] = [
@@ -80,6 +103,7 @@ export const ROLES_REGISTRABLES: { value: string; label: string }[] = [
   { value: 'anotador', label: 'Anotador' },
   { value: 'consultor', label: 'Consultor' },
   { value: 'colaborador_lengua', label: 'Colaborador de lengua' },
+  { value: 'pendiente', label: 'Pendiente (sin permisos)' },
 ]
 
 /**

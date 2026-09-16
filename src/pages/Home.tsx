@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { Lock, Languages, BookOpen, Cpu, Tag } from 'lucide-react'
+import { Lock, Languages, BookOpen, Cpu, Tag, Clock } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 export default function Home() {
@@ -46,6 +46,11 @@ export default function Home() {
               <Languages size={18} aria-hidden="true" />
               Ir al Traductor
             </button>
+          ) : isAuthenticated ? (
+            <p className="ent-hint" style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+              <Clock size={15} aria-hidden="true" />
+              Tu cuenta todavía no tiene acceso al Traductor. Un administrador debe asignarte un rol.
+            </p>
           ) : (
             <button
               type="button"

@@ -7,6 +7,7 @@ import Home from './pages/Home'
 import About from './pages/About'
 import Login from './pages/Login'
 import Setup from './pages/Setup'
+import Registro from './pages/Registro'
 import Traductor from './pages/Traductor'
 import Etiquetado from './pages/Etiquetado'
 import Glosario from './pages/Glosario'
@@ -21,8 +22,9 @@ export default function App() {
           {/* Rutas públicas */}
           <Route path="/"       element={<Home />} />
           <Route path="/acerca" element={<About />} />
-          <Route path="/login"  element={<Login />} />
-          <Route path="/setup"  element={<Setup />} />
+          <Route path="/login"    element={<Login />} />
+          <Route path="/setup"    element={<Setup />} />
+          <Route path="/registro" element={<Registro />} />
 
           {/* Rutas protegidas — requieren sesión iniciada */}
           <Route element={<RequireAuth check={p => p.traduccion} />}>

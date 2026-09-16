@@ -1876,7 +1876,7 @@ function SubirTab() {
 // SistemaPanel — HU-MON-04 (sistema/, liberar-memoria/, reiniciar-backend/)
 // ══════════════════════════════════════════════════════════════════════════════
 
-function SistemaPanel() {
+function SistemaPanel({ canLiberarMemoria, canReiniciar }: { canLiberarMemoria: boolean; canReiniciar: boolean }) {
   const [info, setInfo]       = useState<SistemaInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr]         = useState('')
@@ -2005,39 +2005,45 @@ function SistemaPanel() {
             </div>
           )}
 
-          <div className="ent-sistema-actions">
-            <div>
-              <button className="ent-btn ent-btn--ghost" onClick={liberarMemoria} disabled={liberando} type="button">
-                {liberando ? <><Loader2 size={13} className="spin" /> Liberando…</> : <><HardDrive size={13} /> Liberar memoria</>}
-              </button>
-              {liberarMsg && <p className="ent-hint" style={{ marginTop: 6 }}>{liberarMsg}</p>}
-            </div>
-
-            <div>
-              {!confirmRestart ? (
-                <button className="ent-btn ent-btn--danger" onClick={() => setConfirmRestart(true)} type="button">
-                  <Power size={13} /> Reiniciar backend
-                </button>
-              ) : (
-                <div className="ent-confirm-box">
-                  <p className="ent-hint" style={{ color: 'var(--red)', fontWeight: 600 }}>
-                    Esto va a desconectar a todos los usuarios por ~10-20s. ¿Confirmas?
-                  </p>
-                  <div className="ent-confirm-actions">
-                    <button className="ent-btn ent-btn--danger ent-btn--sm" onClick={reiniciarBackend} disabled={reiniciando} type="button">
-                      {reiniciando ? <><Loader2 size={12} className="spin" /> Reiniciando…</> : 'Sí, reiniciar'}
-                    </button>
-                    <button className="ent-btn ent-btn--ghost ent-btn--sm" onClick={() => setConfirmRestart(false)} disabled={reiniciando} type="button">
-                      Cancelar
-                    </button>
-                  </div>
+          {(canLiberarMemoria || canReiniciar) && (
+            <div className="ent-sistema-actions">
+              {canLiberarMemoria && (
+                <div>
+                  <button className="ent-btn ent-btn--ghost" onClick={liberarMemoria} disabled={liberando} type="button">
+                    {liberando ? <><Loader2 size={13} className="spin" /> Liberando…</> : <><HardDrive size={13} /> Liberar memoria</>}
+                  </button>
+                  {liberarMsg && <p className="ent-hint" style={{ marginTop: 6 }}>{liberarMsg}</p>}
                 </div>
               )}
-              {restartMsg && <p className="ent-hint" style={{ marginTop: 6 }}>{restartMsg}</p>}
-              {restartErr && <p className="ent-err-sm" style={{ marginTop: 6 }}>{restartErr}</p>}
-              {restartUnavailable && <div style={{ marginTop: 6 }}><NoDisponible>Reiniciar backend todavía no está disponible en el servidor.</NoDisponible></div>}
+
+              {canReiniciar && (
+                <div>
+                  {!confirmRestart ? (
+                    <button className="ent-btn ent-btn--danger" onClick={() => setConfirmRestart(true)} type="button">
+                      <Power size={13} /> Reiniciar backend
+                    </button>
+                  ) : (
+                    <div className="ent-confirm-box">
+                      <p className="ent-hint" style={{ color: 'var(--red)', fontWeight: 600 }}>
+                        Esto va a desconectar a todos los usuarios por ~10-20s. ¿Confirmas?
+                      </p>
+                      <div className="ent-confirm-actions">
+                        <button className="ent-btn ent-btn--danger ent-btn--sm" onClick={reiniciarBackend} disabled={reiniciando} type="button">
+                          {reiniciando ? <><Loader2 size={12} className="spin" /> Reiniciando…</> : 'Sí, reiniciar'}
+                        </button>
+                        <button className="ent-btn ent-btn--ghost ent-btn--sm" onClick={() => setConfirmRestart(false)} disabled={reiniciando} type="button">
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {restartMsg && <p className="ent-hint" style={{ marginTop: 6 }}>{restartMsg}</p>}
+                  {restartErr && <p className="ent-err-sm" style={{ marginTop: 6 }}>{restartErr}</p>}
+                  {restartUnavailable && <div style={{ marginTop: 6 }}><NoDisponible>Reiniciar backend todavía no está disponible en el servidor.</NoDisponible></div>}
+                </div>
+              )}
             </div>
-          </div>
+          )}
         </>
       )}
     </div>
@@ -2049,6 +2055,8 @@ function SistemaPanel() {
 // ══════════════════════════════════════════════════════════════════════════════
 
 function ProcesosTab() {
+  const { permissions } = useAuth()
+  const canCancelar = permissions.modelosAsr.activarCancelar
   const [data, setData]       = useState<ProcesosResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [unavailable, setUnavailable] = useState(false)
@@ -2081,7 +2089,7 @@ function ProcesosTab() {
 
   return (
     <div className="ent-section">
-      <SistemaPanel />
+      <SistemaPanel canLiberarMemoria={permissions.modelosAsr.liberarMemoria} canReiniciar={permissions.modelosAsr.reiniciarBackend} />
 
       <div className="ent-section-head" style={{ marginTop: 8 }}>
         <div>
@@ -2134,7 +2142,7 @@ function ProcesosTab() {
                           : <span className="ent-badge ent-badge--warn"><AlertTriangle size={10} /> Iniciando</span>}
                     </td>
                     <td>
-                      {p.colgado && (
+                      {p.colgado && canCancelar && (
                         <button
                           className="ent-btn ent-btn--sm ent-btn--danger"
                           onClick={() => detener(p.experimento_id)}
@@ -2160,23 +2168,27 @@ function ProcesosTab() {
 // Page
 // ══════════════════════════════════════════════════════════════════════════════
 
-const ALL_TABS: { id: Tab; label: string; Icon: LucideIcon; minRole: 'all' | 'canUpload' | 'canManage' }[] = [
-  { id: 'datos',        label: 'Datos',        Icon: Database,  minRole: 'all'       },
-  { id: 'modelos',      label: 'Modelos',      Icon: Cpu,       minRole: 'all'       },
-  { id: 'entrenar',     label: 'Entrenar',     Icon: Play,      minRole: 'canManage' },
-  { id: 'experimentos', label: 'Experimentos', Icon: BarChart2, minRole: 'all'       },
-  { id: 'procesos',     label: 'Procesos',     Icon: Server,    minRole: 'all'       },
-  { id: 'transcribir',  label: 'Transcribir',  Icon: Mic,       minRole: 'all'       },
-  { id: 'subir',        label: 'Subir datos',  Icon: FolderPlus,minRole: 'canUpload' },
+const ALL_TABS: { id: Tab; label: string; Icon: LucideIcon; minRole: 'all' | 'canUpload' | 'canManage' | 'verProgreso' }[] = [
+  { id: 'datos',        label: 'Datos',        Icon: Database,  minRole: 'all'        },
+  { id: 'modelos',      label: 'Modelos',      Icon: Cpu,       minRole: 'all'        },
+  { id: 'entrenar',     label: 'Entrenar',     Icon: Play,      minRole: 'canManage'  },
+  { id: 'experimentos', label: 'Experimentos', Icon: BarChart2, minRole: 'all'        },
+  { id: 'procesos',     label: 'Procesos',     Icon: Server,    minRole: 'verProgreso'},
+  { id: 'transcribir',  label: 'Transcribir',  Icon: Mic,       minRole: 'all'        },
+  { id: 'subir',        label: 'Subir datos',  Icon: FolderPlus,minRole: 'canUpload'  },
 ]
 
 export default function Entrenamiento() {
   const { permissions } = useAuth()
   const canManage = permissions.modelosAsr.entrenar
   const canUpload = permissions.datasetAudio.subir
+  const canVerProgreso = permissions.modelosAsr.verProgreso
 
   const visibleTabs = ALL_TABS.filter(t =>
-    t.minRole === 'all' || (t.minRole === 'canManage' && canManage) || (t.minRole === 'canUpload' && canUpload)
+    t.minRole === 'all'
+    || (t.minRole === 'canManage' && canManage)
+    || (t.minRole === 'canUpload' && canUpload)
+    || (t.minRole === 'verProgreso' && canVerProgreso)
   )
 
   const [tab, setTab]               = useState<Tab>('datos')

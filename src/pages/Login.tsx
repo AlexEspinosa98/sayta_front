@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { Lock, Eye, EyeOff, AlertCircle, LogIn } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
@@ -87,6 +87,10 @@ export default function Login() {
             <LogIn size={15} aria-hidden="true" /> {loading ? 'Ingresando…' : 'Ingresar'}
           </button>
         </form>
+
+        <p className="ent-hint" style={{ marginTop: 16, textAlign: 'center' }}>
+          ¿No tienes cuenta? <Link to="/registro">Regístrate</Link>
+        </p>
       </div>
     </div>
   )
