@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { BookOpen, Home, Library, Activity, Tag, Unlock, Languages, Menu, X } from 'lucide-react'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { BookOpen, Home, Library, Activity, Tag, LogOut, LogIn, Languages, Menu, X, Users } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 const ESCUDO = '/Assets/logos/unimagdalena-escudo.png'
 const SAYTA_LOGO = '/Assets/logos/sayta-logo.svg'
 
 export default function Layout() {
-  const { isUnlocked, lock } = useAuth()
+  const { isAuthenticated, user, permissions, logout } = useAuth()
+  const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
   const location = useLocation()
 
@@ -74,29 +75,40 @@ export default function Layout() {
                   <Home size={16} aria-hidden="true" /><span>Inicio</span>
                 </NavLink>
               </li>
-              {isUnlocked && (
-                <>
-                  <li>
-                    <NavLink to="/traductor" className={navLinkClass} onClick={closeMenu}>
-                      <Languages size={16} aria-hidden="true" /><span>Traductor</span>
-                    </NavLink>
-                  </li>
-                  <li>
-                    <NavLink to="/glosario" className={navLinkClass} onClick={closeMenu}>
-                      <Library size={16} aria-hidden="true" /><span>Glosario</span>
-                    </NavLink>
-                  </li>
-                  <li>
-                    <NavLink to="/entrenamiento" className={navLinkClass} onClick={closeMenu}>
-                      <Activity size={16} aria-hidden="true" /><span>Entrenamiento</span>
-                    </NavLink>
-                  </li>
-                  <li>
-                    <NavLink to="/etiquetado" className={navLinkClass} onClick={closeMenu}>
-                      <Tag size={16} aria-hidden="true" /><span>Etiquetado</span>
-                    </NavLink>
-                  </li>
-                </>
+              {isAuthenticated && permissions.traduccion && (
+                <li>
+                  <NavLink to="/traductor" className={navLinkClass} onClick={closeMenu}>
+                    <Languages size={16} aria-hidden="true" /><span>Traductor</span>
+                  </NavLink>
+                </li>
+              )}
+              {isAuthenticated && permissions.glosario.leer && (
+                <li>
+                  <NavLink to="/glosario" className={navLinkClass} onClick={closeMenu}>
+                    <Library size={16} aria-hidden="true" /><span>Glosario</span>
+                  </NavLink>
+                </li>
+              )}
+              {isAuthenticated && permissions.modelosAsr.leer && (
+                <li>
+                  <NavLink to="/entrenamiento" className={navLinkClass} onClick={closeMenu}>
+                    <Activity size={16} aria-hidden="true" /><span>Entrenamiento</span>
+                  </NavLink>
+                </li>
+              )}
+              {isAuthenticated && permissions.datasetAudio.leer && (
+                <li>
+                  <NavLink to="/etiquetado" className={navLinkClass} onClick={closeMenu}>
+                    <Tag size={16} aria-hidden="true" /><span>Etiquetado</span>
+                  </NavLink>
+                </li>
+              )}
+              {isAuthenticated && permissions.usuarios.gestionar && (
+                <li>
+                  <NavLink to="/admin/usuarios" className={navLinkClass} onClick={closeMenu}>
+                    <Users size={16} aria-hidden="true" /><span>Usuarios</span>
+                  </NavLink>
+                </li>
               )}
               <li>
                 <NavLink to="/acerca" className={navLinkClass} onClick={closeMenu}>
@@ -107,9 +119,26 @@ export default function Layout() {
           </nav>
 
           <div className="header-actions">
-            {isUnlocked && (
-              <button className="header-lock-btn" onClick={lock} title="Bloquear acceso" aria-label="Bloquear acceso">
-                <Unlock size={16} aria-hidden="true" /><span>Bloquear</span>
+            {isAuthenticated && user && (
+              <span className="header-user-badge" title={user.rol_display}>
+                {user.username} · {user.rol_display}
+              </span>
+            )}
+            {isAuthenticated ? (
+              <button
+                className="header-lock-btn"
+                onClick={async () => { await logout(); navigate('/') }}
+                title="Cerrar sesión" aria-label="Cerrar sesión"
+              >
+                <LogOut size={16} aria-hidden="true" /><span>Salir</span>
+              </button>
+            ) : (
+              <button
+                className="header-lock-btn"
+                onClick={() => navigate('/login')}
+                title="Iniciar sesión" aria-label="Iniciar sesión"
+              >
+                <LogIn size={16} aria-hidden="true" /><span>Ingresar</span>
               </button>
             )}
             <button

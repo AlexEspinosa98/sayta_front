@@ -5,6 +5,7 @@ import {
   Zap, BookOpen, Globe, Cpu, RotateCcw, FileJson,
 } from 'lucide-react'
 import { apiFetch, API_BASE } from '../api'
+import { useAuth } from '../context/AuthContext'
 
 import {
   useSpecialKeyboard, SpecialKeyboardPanel, SpecialKeyboardToggle,
@@ -290,7 +291,10 @@ function makeEmptyForm(lenguaId: string): TerminoFormState {
   return { termino: '', lengua: lenguaId, termino_es_texto: '', definicion: '', pos: '', sinonimos: '', ejemplos: '', activo: true }
 }
 
-function TerminosTab({ lenguas, canManage }: { lenguas: Lengua[]; canManage: boolean }) {
+interface TerminoPerms { crear: boolean; editar: boolean; eliminar: boolean; cargaMasiva: boolean }
+
+function TerminosTab({ lenguas, perms }: { lenguas: Lengua[]; perms: TerminoPerms }) {
+  const canEditRow = perms.editar || perms.eliminar
   const [terminos, setTerminos]         = useState<Termino[]>([])
   const [loading, setLoading]           = useState(false)
   const [error, setError]               = useState('')
@@ -412,28 +416,25 @@ function TerminosTab({ lenguas, canManage }: { lenguas: Lengua[]; canManage: boo
           <option value="true">Activos</option>
           <option value="false">Inactivos</option>
         </select>
-        {canManage && (
-          <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
+        <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
+          {perms.crear && (
             <button className="eg-btn eg-btn--primary" onClick={formMode === 'create' ? closeForm : openCreate} disabled={!filterLengua}>
               {formMode === 'create' ? <><X size={14} /> Cancelar</> : <><Plus size={14} /> Nuevo</>}
             </button>
+          )}
+          {perms.cargaMasiva && (
             <button className="eg-btn eg-btn--ghost" onClick={() => setShowBulk(true)} disabled={!filterLengua}><FileJson size={14} /> Carga masiva</button>
-            <button className="eg-btn eg-btn--ghost" onClick={load} disabled={loading} title="Actualizar lista">
-              <RefreshCw size={13} className={loading ? 'spin' : ''} /> Actualizar
-            </button>
-          </div>
-        )}
-        {!canManage && (
-          <button className="eg-btn eg-btn--ghost" onClick={load} disabled={loading} style={{ marginLeft: 'auto' }}>
+          )}
+          <button className="eg-btn eg-btn--ghost" onClick={load} disabled={loading} title="Actualizar lista">
             <RefreshCw size={13} className={loading ? 'spin' : ''} /> Actualizar
           </button>
-        )}
+        </div>
       </div>
 
       {!filterLengua && <div className="gl-empty"><BookOpen size={32} /><p>Selecciona una lengua para ver sus términos.</p></div>}
       {error && <div className="gl-alert"><AlertCircle size={16} />{error}</div>}
 
-      {canManage && formMode && (
+      {((perms.crear && formMode === 'create') || (perms.editar && formMode === 'edit')) && (
         <TerminoInlineForm
           title={formMode === 'create' ? 'Nuevo término' : `Editando: ${editing?.termino}`}
           form={form} setForm={setForm}
@@ -453,7 +454,7 @@ function TerminosTab({ lenguas, canManage }: { lenguas: Lengua[]; canManage: boo
               <thead>
                 <tr>
                   <th>Término</th><th>Español</th><th>Definición</th><th>POS</th><th>Estado</th>
-                  {canManage && <th>Acciones</th>}
+                  {canEditRow && <th>Acciones</th>}
                 </tr>
               </thead>
               <tbody>
@@ -464,15 +465,17 @@ function TerminosTab({ lenguas, canManage }: { lenguas: Lengua[]; canManage: boo
                     <td className="gl-td-gray gl-td-clamp">{t.definicion || '—'}</td>
                     <td><span className="gl-badge gl-badge--blue">{t.pos || 'Sin definir'}</span></td>
                     <td><span className={`gl-badge ${t.activo ? 'gl-badge--green' : 'gl-badge--gray'}`}>{t.activo ? 'Activo' : 'Inactivo'}</span></td>
-                    {canManage && (
+                    {canEditRow && (
                       <td>
                         <div className="gl-row-actions">
-                          <button className="eg-btn eg-btn--ghost" onClick={() => editing?.id === t.id ? closeForm() : openEdit(t)}>
-                            {editing?.id === t.id ? <><X size={13} /></> : <><Edit2 size={13} /></>}
-                          </button>
-                          {t.activo
+                          {perms.editar && (
+                            <button className="eg-btn eg-btn--ghost" onClick={() => editing?.id === t.id ? closeForm() : openEdit(t)}>
+                              {editing?.id === t.id ? <><X size={13} /></> : <><Edit2 size={13} /></>}
+                            </button>
+                          )}
+                          {perms.eliminar && (t.activo
                             ? <button className="eg-btn eg-btn--danger" onClick={() => setDeleting(t)}><Trash2 size={13} /></button>
-                            : <button className="eg-btn eg-btn--ghost" onClick={() => setRestoring(t)}><RotateCcw size={13} /></button>}
+                            : <button className="eg-btn eg-btn--ghost" onClick={() => setRestoring(t)}><RotateCcw size={13} /></button>)}
                         </div>
                       </td>
                     )}
@@ -490,7 +493,7 @@ function TerminosTab({ lenguas, canManage }: { lenguas: Lengua[]; canManage: boo
         </>
       ) : null}
 
-      {showBulk && filterLengua && canManage && (
+      {showBulk && filterLengua && perms.cargaMasiva && (
         <BulkModal lenguaId={filterLengua} onClose={() => { setShowBulk(false); load() }} />
       )}
       {deleting && (
@@ -930,7 +933,15 @@ function ConfirmModal({ title, message, danger, saving, onConfirm, onClose }: {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function Glosario() {
-  const canManage = true
+  const { permissions } = useAuth()
+  const canManageLenguas = permissions.glosario.crear && permissions.glosario.eliminar
+  const canManageEmbeddings = permissions.embeddings.generarActivar
+  const terminoPerms: TerminoPerms = {
+    crear: permissions.glosario.crear,
+    editar: permissions.glosario.editar,
+    eliminar: permissions.glosario.eliminar,
+    cargaMasiva: permissions.glosario.cargaMasiva,
+  }
   const [activeTab, setActiveTab] = useState<Tab>('lenguas')
   const [lenguas, setLenguas]     = useState<Lengua[]>([])
   const [loadingL, setLoadingL]   = useState(true)
@@ -978,9 +989,9 @@ export default function Glosario() {
           <div className="gl-loading" style={{ marginTop: 40 }}><Loader2 size={20} className="spin" /> Conectando con el servidor…</div>
         ) : (
           <>
-            {activeTab === 'lenguas'    && <LenguasTab canManage={canManage} />}
-            {activeTab === 'terminos'   && <TerminosTab lenguas={lenguas} canManage={canManage} />}
-            {activeTab === 'embeddings' && <EmbeddingsTab lenguas={lenguas} canManage={canManage} />}
+            {activeTab === 'lenguas'    && <LenguasTab canManage={canManageLenguas} />}
+            {activeTab === 'terminos'   && <TerminosTab lenguas={lenguas} perms={terminoPerms} />}
+            {activeTab === 'embeddings' && <EmbeddingsTab lenguas={lenguas} canManage={canManageEmbeddings} />}
           </>
         )}
       </div>

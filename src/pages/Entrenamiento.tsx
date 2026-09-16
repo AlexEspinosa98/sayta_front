@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { apiFetch as sharedFetch, API_BASE } from '../api'
 import { useAudioRecorder } from '../hooks/useAudioRecorder'
+import { useAuth } from '../context/AuthContext'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -2170,9 +2171,19 @@ const ALL_TABS: { id: Tab; label: string; Icon: LucideIcon; minRole: 'all' | 'ca
 ]
 
 export default function Entrenamiento() {
+  const { permissions } = useAuth()
+  const canManage = permissions.modelosAsr.entrenar
+  const canUpload = permissions.datasetAudio.subir
+
+  const visibleTabs = ALL_TABS.filter(t =>
+    t.minRole === 'all' || (t.minRole === 'canManage' && canManage) || (t.minRole === 'canUpload' && canUpload)
+  )
+
   const [tab, setTab]               = useState<Tab>('datos')
   const [selSesiones, setSelSesiones] = useState<SesionKey[]>([])
   const [monitorId, setMonitorId]   = useState<string | null>(null)
+
+  const activeTab = visibleTabs.some(t => t.id === tab) ? tab : 'datos'
 
   return (
     <div className="gl-page">
@@ -2185,9 +2196,9 @@ export default function Entrenamiento() {
       </div>
 
       <div className="gl-tabs-bar">
-        {ALL_TABS.map(({ id, label, Icon }) => (
+        {visibleTabs.map(({ id, label, Icon }) => (
           <button key={id} type="button"
-            className={`gl-tab${tab === id ? ' gl-tab-active' : ''}`}
+            className={`gl-tab${activeTab === id ? ' gl-tab-active' : ''}`}
             onClick={() => setTab(id)}>
             <Icon size={13} />
             {label}
@@ -2197,20 +2208,20 @@ export default function Entrenamiento() {
       </div>
 
       <div className="ent-tab-content">
-        {tab === 'datos' && <DatosTab onSelectSesiones={setSelSesiones} canManage={true} />}
-        {tab === 'modelos' && <ModelosTab canManage={true} />}
-        {tab === 'entrenar' && (
+        {activeTab === 'datos' && <DatosTab onSelectSesiones={setSelSesiones} canManage={canManage} />}
+        {activeTab === 'modelos' && <ModelosTab canManage={canManage} />}
+        {activeTab === 'entrenar' && canManage && (
           <EntrenarTab
             preselectedSesiones={selSesiones}
             onStarted={id => { setMonitorId(id); setTab('experimentos') }}
           />
         )}
-        {tab === 'experimentos' && (
-          <ExperimentosTab monitorId={monitorId} onClearMonitor={() => setMonitorId(null)} canManage={true} />
+        {activeTab === 'experimentos' && (
+          <ExperimentosTab monitorId={monitorId} onClearMonitor={() => setMonitorId(null)} canManage={canManage} />
         )}
-        {tab === 'procesos' && <ProcesosTab />}
-        {tab === 'transcribir' && <TranscribirTab />}
-        {tab === 'subir' && <SubirTab />}
+        {activeTab === 'procesos' && <ProcesosTab />}
+        {activeTab === 'transcribir' && <TranscribirTab />}
+        {activeTab === 'subir' && canUpload && <SubirTab />}
       </div>
     </div>
   )

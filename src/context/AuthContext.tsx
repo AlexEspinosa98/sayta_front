@@ -1,40 +1,117 @@
-import { createContext, useContext, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
+import { apiFetch, apiErr, setUnauthorizedHandler, TOKEN_KEY } from '../api'
+import { getPermissions, type Permissions } from '../permissions'
 
-const ADMIN_PW  = 'Un1m4gd4l3n4'
-const SESS_KEY  = 'sayta_admin'
+const USER_KEY = 'sayta_user'
+
+export interface Usuario {
+  id: number
+  username: string
+  email: string
+  first_name: string
+  last_name: string
+  is_active: boolean
+  rol: string
+  rol_display: string
+  date_joined: string
+}
 
 interface AuthContextType {
-  isUnlocked: boolean
-  unlock: (pw: string) => boolean
-  lock: () => void
+  user: Usuario | null
+  token: string | null
+  loading: boolean
+  permissions: Permissions
+  isAuthenticated: boolean
+  login: (username: string, password: string) => Promise<void>
+  logout: () => Promise<void>
+  refreshProfile: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
+function readStoredUser(): Usuario | null {
+  try {
+    const raw = localStorage.getItem(USER_KEY)
+    return raw ? JSON.parse(raw) as Usuario : null
+  } catch { return null }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [isUnlocked, setIsUnlocked] = useState(
-    () => sessionStorage.getItem(SESS_KEY) === '1'
-  )
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY))
+  const [user, setUser]   = useState<Usuario | null>(() => readStoredUser())
+  const [loading, setLoading] = useState(true)
 
-  const unlock = (pw: string): boolean => {
-    if (pw === ADMIN_PW) {
-      sessionStorage.setItem(SESS_KEY, '1')
-      setIsUnlocked(true)
-      return true
+  const clearSession = useCallback(() => {
+    localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem(USER_KEY)
+    setToken(null)
+    setUser(null)
+  }, [])
+
+  const persistSession = useCallback((newToken: string, usuario: Usuario) => {
+    localStorage.setItem(TOKEN_KEY, newToken)
+    localStorage.setItem(USER_KEY, JSON.stringify(usuario))
+    setToken(newToken)
+    setUser(usuario)
+  }, [])
+
+  useEffect(() => {
+    setUnauthorizedHandler(() => clearSession())
+    return () => setUnauthorizedHandler(null)
+  }, [clearSession])
+
+  useEffect(() => {
+    let cancelled = false
+    async function bootstrap() {
+      if (!localStorage.getItem(TOKEN_KEY)) { setLoading(false); return }
+      try {
+        const perfil = await apiFetch('/auth/perfil/') as Usuario
+        if (!cancelled) {
+          localStorage.setItem(USER_KEY, JSON.stringify(perfil))
+          setUser(perfil)
+        }
+      } catch {
+        if (!cancelled) clearSession()
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
     }
-    return false
+    bootstrap()
+    return () => { cancelled = true }
+  }, [clearSession])
+
+  const login = useCallback(async (username: string, password: string) => {
+    try {
+      const data = await apiFetch('/auth/login/', {
+        method: 'POST',
+        body: JSON.stringify({ username, password }),
+      }) as { token: string; usuario: Usuario }
+      persistSession(data.token, data.usuario)
+    } catch (e) {
+      throw new Error(apiErr(e, 'Credenciales incorrectas.'))
+    }
+  }, [persistSession])
+
+  const logout = useCallback(async () => {
+    try { await apiFetch('/auth/logout/', { method: 'POST' }) }
+    catch { /* logout es idempotente — igual limpiamos la sesión local */ }
+    finally { clearSession() }
+  }, [clearSession])
+
+  const refreshProfile = useCallback(async () => {
+    const perfil = await apiFetch('/auth/perfil/') as Usuario
+    localStorage.setItem(USER_KEY, JSON.stringify(perfil))
+    setUser(perfil)
+  }, [])
+
+  const value: AuthContextType = {
+    user, token, loading,
+    permissions: getPermissions(user?.rol),
+    isAuthenticated: Boolean(user && token),
+    login, logout, refreshProfile,
   }
 
-  const lock = () => {
-    sessionStorage.removeItem(SESS_KEY)
-    setIsUnlocked(false)
-  }
-
-  return (
-    <AuthContext.Provider value={{ isUnlocked, unlock, lock }}>
-      {children}
-    </AuthContext.Provider>
-  )
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export function useAuth(): AuthContextType {

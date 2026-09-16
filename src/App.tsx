@@ -5,10 +5,13 @@ import RequireAuth from './components/RequireAuth'
 import Layout from './components/Layout'
 import Home from './pages/Home'
 import About from './pages/About'
+import Login from './pages/Login'
+import Setup from './pages/Setup'
 import Traductor from './pages/Traductor'
 import Etiquetado from './pages/Etiquetado'
 import Glosario from './pages/Glosario'
 import Entrenamiento from './pages/Entrenamiento'
+import Usuarios from './pages/admin/Usuarios'
 
 export default function App() {
   return (
@@ -18,13 +21,24 @@ export default function App() {
           {/* Rutas públicas */}
           <Route path="/"       element={<Home />} />
           <Route path="/acerca" element={<About />} />
+          <Route path="/login"  element={<Login />} />
+          <Route path="/setup"  element={<Setup />} />
 
-          {/* Rutas protegidas — requieren contraseña */}
-          <Route element={<RequireAuth />}>
-            <Route path="/traductor"     element={<Traductor />} />
-            <Route path="/glosario"      element={<Glosario />} />
+          {/* Rutas protegidas — requieren sesión iniciada */}
+          <Route element={<RequireAuth check={p => p.traduccion} />}>
+            <Route path="/traductor" element={<Traductor />} />
+          </Route>
+          <Route element={<RequireAuth check={p => p.glosario.leer} />}>
+            <Route path="/glosario" element={<Glosario />} />
+          </Route>
+          <Route element={<RequireAuth check={p => p.modelosAsr.leer} />}>
             <Route path="/entrenamiento" element={<Entrenamiento />} />
-            <Route path="/etiquetado"    element={<Etiquetado />} />
+          </Route>
+          <Route element={<RequireAuth check={p => p.datasetAudio.leer} />}>
+            <Route path="/etiquetado" element={<Etiquetado />} />
+          </Route>
+          <Route element={<RequireAuth check={p => p.usuarios.gestionar} />}>
+            <Route path="/admin/usuarios" element={<Usuarios />} />
           </Route>
         </Route>
       </Routes>

@@ -1,14 +1,13 @@
 /// <reference types="vite/client" />
 import { useState, useEffect, useCallback } from 'react'
 import {
-  Lock, Mic, FolderOpen, BarChart2, RefreshCw, AlertCircle,
+  Mic, FolderOpen, BarChart2, RefreshCw, AlertCircle,
   Music, BookOpen, Tag, Check, Trash2, Edit2, X, ArrowLeft,
-  ChevronDown, Clock,
+  ChevronDown, Clock, Eye,
 } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
 
 const API = (import.meta.env.VITE_API_URL as string | undefined) ?? ''
-const PASSWORD = 'Un1m4gd4l3n4'
-const SESSION_KEY = 'etiquetado_auth'
 
 /* ═══════════════════════════════════════════════════════
    TYPES
@@ -76,60 +75,6 @@ type NavState =
   | { view: 'session'; community: string; session: string }
 
 type LabelMode = 'idle' | 'editing' | 'saving' | 'deleting'
-
-/* ═══════════════════════════════════════════════════════
-   PASSWORD GATE
-═══════════════════════════════════════════════════════ */
-
-function PasswordGate({ onAuth }: { onAuth: () => void }) {
-  const [value, setValue] = useState('')
-  const [error, setError] = useState(false)
-  const [shaking, setShaking] = useState(false)
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (value === PASSWORD) {
-      sessionStorage.setItem(SESSION_KEY, '1')
-      onAuth()
-    } else {
-      setError(true)
-      setShaking(true)
-      setTimeout(() => setShaking(false), 500)
-    }
-  }
-
-  return (
-    <div className="eg-gate">
-      <div className={`eg-gate-card${shaking ? ' eg-shake' : ''}`}>
-        <div className="eg-gate-icon"><Lock size={28} /></div>
-        <h1 className="eg-gate-title">Área de Etiquetado</h1>
-        <p className="eg-gate-sub">Acceso restringido — ingresa la contraseña para continuar</p>
-        <form onSubmit={handleSubmit} className="eg-gate-form" noValidate>
-          <label htmlFor="eg-pwd" className="sr-only">Contraseña</label>
-          <input
-            id="eg-pwd"
-            type="password"
-            value={value}
-            onChange={e => { setValue(e.target.value); setError(false) }}
-            placeholder="Contraseña"
-            className={`eg-gate-input${error ? ' eg-gate-input--error' : ''}`}
-            autoFocus
-            autoComplete="current-password"
-            aria-describedby={error ? 'eg-pwd-err' : undefined}
-          />
-          {error && (
-            <p id="eg-pwd-err" className="eg-gate-err" role="alert">
-              <AlertCircle size={14} aria-hidden="true" /> Contraseña incorrecta
-            </p>
-          )}
-          <button type="submit" className="eg-gate-btn">
-            <Lock size={15} aria-hidden="true" /> Ingresar
-          </button>
-        </form>
-      </div>
-    </div>
-  )
-}
 
 /* ═══════════════════════════════════════════════════════
    STAT CARD
@@ -495,7 +440,7 @@ function GlossaryModal({ community, session, onClose }: {
    AUDIO ROW  (HU-16 · HU-18 · HU-19 · HU-20)
 ═══════════════════════════════════════════════════════ */
 
-function AudioRow({ audio, community, session, onLabelChange, isExpanded, onToggle, glossaryCategories }: {
+function AudioRow({ audio, community, session, onLabelChange, isExpanded, onToggle, glossaryCategories, canEtiquetar }: {
   audio: AudioItem
   community: string
   session: string
@@ -503,6 +448,7 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
   isExpanded: boolean
   onToggle: () => void
   glossaryCategories: GlosarioCategoria[]
+  canEtiquetar: boolean
 }) {
   const [mode, setMode]         = useState<LabelMode>('idle')
   const [inputVal, setInputVal] = useState(audio.etiqueta ?? '')
@@ -562,7 +508,7 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
   }
 
   const showDisplay = isLabeled && (mode === 'idle' || mode === 'deleting')
-  const showInput   = (!isLabeled && mode === 'idle') || mode === 'editing' || mode === 'saving'
+  const showInput   = canEtiquetar && ((!isLabeled && mode === 'idle') || mode === 'editing' || mode === 'saving')
 
   return (
     <li className={`eg-audio-row${isExpanded ? ' eg-audio-row--open' : ''}`}>
@@ -603,17 +549,23 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
             {showDisplay && (
               <div className="eg-label-display">
                 <span className="eg-label-value">{audio.etiqueta}</span>
-                <div className="eg-label-actions">
-                  <button onClick={startEdit} disabled={isBusy} className="eg-btn eg-btn--ghost">
-                    <Edit2 size={14} aria-hidden="true" /> Editar
-                  </button>
-                  <button onClick={handleDelete} disabled={isBusy} className="eg-btn eg-btn--danger">
-                    {mode === 'deleting'
-                      ? <><RefreshCw size={14} className="spin" aria-hidden="true" /> Eliminando…</>
-                      : <><Trash2 size={14} aria-hidden="true" /> Eliminar</>}
-                  </button>
-                </div>
+                {canEtiquetar && (
+                  <div className="eg-label-actions">
+                    <button onClick={startEdit} disabled={isBusy} className="eg-btn eg-btn--ghost">
+                      <Edit2 size={14} aria-hidden="true" /> Editar
+                    </button>
+                    <button onClick={handleDelete} disabled={isBusy} className="eg-btn eg-btn--danger">
+                      {mode === 'deleting'
+                        ? <><RefreshCw size={14} className="spin" aria-hidden="true" /> Eliminando…</>
+                        : <><Trash2 size={14} aria-hidden="true" /> Eliminar</>}
+                    </button>
+                  </div>
+                )}
               </div>
+            )}
+
+            {!canEtiquetar && !isLabeled && (
+              <p className="ent-hint"><Eye size={13} aria-hidden="true" style={{ verticalAlign: 'middle', marginRight: 4 }} />Sin etiqueta — solo lectura, no tienes permiso para etiquetar.</p>
             )}
 
             {/* Input mode: free text + optional glossary panel */}
@@ -679,8 +631,8 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
    Glossary categories are passed into every AudioRow.
 ═══════════════════════════════════════════════════════ */
 
-function SessionWorkspace({ community, session, onBack }: {
-  community: string; session: string; onBack: () => void
+function SessionWorkspace({ community, session, onBack, canEtiquetar }: {
+  community: string; session: string; onBack: () => void; canEtiquetar: boolean
 }) {
   const [audios, setAudios]                         = useState<AudioItem[]>([])
   const [estado, setEstado]                         = useState<EstadoResponse | null>(null)
@@ -841,6 +793,7 @@ function SessionWorkspace({ community, session, onBack }: {
                     isExpanded={expandedAudio === a.nombre}
                     onToggle={() => setExpandedAudio(prev => prev === a.nombre ? null : a.nombre)}
                     glossaryCategories={glossaryCategories}
+                    canEtiquetar={canEtiquetar}
                   />
                 ))}
               </ul>
@@ -864,7 +817,7 @@ function SessionWorkspace({ community, session, onBack }: {
    MAIN APP
 ═══════════════════════════════════════════════════════ */
 
-function EtiquetadoApp() {
+function EtiquetadoApp({ canEtiquetar }: { canEtiquetar: boolean }) {
   const [nav, setNav] = useState<NavState>({ view: 'dashboard' })
 
   if (nav.view === 'session') {
@@ -873,6 +826,7 @@ function EtiquetadoApp() {
         community={nav.community}
         session={nav.session}
         onBack={() => setNav({ view: 'dashboard' })}
+        canEtiquetar={canEtiquetar}
       />
     )
   }
@@ -882,7 +836,10 @@ function EtiquetadoApp() {
       <div className="eg-page-header">
         <div className="container">
           <h1 className="eg-page-title"><Mic size={22} aria-hidden="true" /> Panel de Etiquetado</h1>
-          <p className="eg-page-sub">Gestión y estadísticas del corpus de audio SAYTA</p>
+          <p className="eg-page-sub">
+            Gestión y estadísticas del corpus de audio SAYTA
+            {!canEtiquetar && ' · modo solo lectura'}
+          </p>
         </div>
       </div>
       <div className="eg-page-body container">
@@ -894,6 +851,6 @@ function EtiquetadoApp() {
 }
 
 export default function Etiquetado() {
-  const [authed, setAuthed] = useState(() => sessionStorage.getItem(SESSION_KEY) === '1')
-  return authed ? <EtiquetadoApp /> : <PasswordGate onAuth={() => setAuthed(true)} />
+  const { permissions } = useAuth()
+  return <EtiquetadoApp canEtiquetar={permissions.datasetAudio.etiquetar} />
 }

@@ -108,6 +108,11 @@
 .header-brand { flex-shrink: 1; overflow: hidden; }
 .header-nav { display: flex; }
 .header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.header-user-badge {
+  font-size: .78rem; font-weight: 600; color: var(--gray-500);
+  white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis;
+}
+@media (max-width: 900px) { .header-user-badge { display: none; } }
 .header-menu-btn {
   display: none;               /* visible solo en móvil */
   width: 44px; height: 44px; align-items: center; justify-content: center;

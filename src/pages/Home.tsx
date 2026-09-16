@@ -1,43 +1,10 @@
-import { useState, useEffect } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
-import { Lock, Eye, EyeOff, AlertCircle, Languages, BookOpen, Cpu, Tag } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Lock, Languages, BookOpen, Cpu, Tag } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 export default function Home() {
-  const { isUnlocked, unlock } = useAuth()
+  const { isAuthenticated, permissions } = useAuth()
   const navigate = useNavigate()
-  const location = useLocation()
-
-  const [showGate, setShowGate] = useState(false)
-  const [gateInput, setGateInput] = useState('')
-  const [gateError, setGateError] = useState(false)
-  const [showPw, setShowPw] = useState(false)
-
-  // Si RequireAuth redirigió aquí, abrir el gate automáticamente
-  const from: string = (location.state as { from?: string } | null)?.from ?? '/traductor'
-  useEffect(() => {
-    if (location.state && (location.state as { from?: string }).from) {
-      setShowGate(true)
-    }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const openGate = (dest = '/traductor') => {
-    setShowGate(true)
-    setGateInput('')
-    setGateError(false)
-    setShowPw(false)
-    // guardar destino en state para el submit
-    navigate('.', { state: { from: dest }, replace: true })
-  }
-
-  const submitGate = () => {
-    if (unlock(gateInput)) {
-      setShowGate(false)
-      navigate(from, { replace: true })
-    } else {
-      setGateError(true)
-    }
-  }
 
   return (
     <section className="home-page" aria-labelledby="home-heading">
@@ -70,7 +37,7 @@ export default function Home() {
             y reconocimiento de voz para preservar y difundir el patrimonio lingüístico ancestral.
           </p>
 
-          {isUnlocked ? (
+          {isAuthenticated && permissions.traduccion ? (
             <button
               type="button"
               className="home-cta-btn"
@@ -83,10 +50,10 @@ export default function Home() {
             <button
               type="button"
               className="home-cta-btn"
-              onClick={() => openGate('/traductor')}
+              onClick={() => navigate('/login', { state: { from: '/traductor' } })}
             >
               <Lock size={18} aria-hidden="true" />
-              Acceder al Traductor
+              Iniciar sesión
             </button>
           )}
         </header>
@@ -133,38 +100,6 @@ export default function Home() {
         </p>
 
       </div>
-
-      {/* ── Modal contraseña ─────────────────────────────────── */}
-      {showGate && (
-        <div className="gate-overlay" role="dialog" aria-modal="true" aria-label="Acceso al sistema">
-          <div className="gate-card">
-            <h2 className="gate-title"><Lock size={16} /> Acceso al sistema</h2>
-            <p className="gate-sub">Ingresa la contraseña para acceder al sistema.</p>
-            <div className="gate-field">
-              <input
-                type={showPw ? 'text' : 'password'}
-                className="gl-input"
-                placeholder="Contraseña"
-                value={gateInput}
-                autoFocus
-                onChange={e => { setGateInput(e.target.value); setGateError(false) }}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') submitGate()
-                  if (e.key === 'Escape') setShowGate(false)
-                }}
-              />
-              <button type="button" className="gate-eye" onClick={() => setShowPw(p => !p)} tabIndex={-1}>
-                {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
-              </button>
-            </div>
-            {gateError && <p className="gate-error"><AlertCircle size={13} /> Contraseña incorrecta.</p>}
-            <div className="gate-actions">
-              <button type="button" className="ent-btn ent-btn--secondary" onClick={() => setShowGate(false)}>Cancelar</button>
-              <button type="button" className="ent-btn ent-btn--primary" onClick={submitGate}>Entrar</button>
-            </div>
-          </div>
-        </div>
-      )}
     </section>
   )
 }
