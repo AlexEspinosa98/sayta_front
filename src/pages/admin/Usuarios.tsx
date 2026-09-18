@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
-  Users, Plus, Edit2, Ban, RotateCcw, X, Loader2, AlertCircle, ShieldCheck, KeyRound,
+  Users, Plus, Edit2, Ban, RotateCcw, X, Loader2, AlertCircle, ShieldCheck, KeyRound, Trash2,
 } from 'lucide-react'
 import { apiFetch, apiErr } from '../../api'
 import { useAuth } from '../../context/AuthContext'
@@ -35,7 +35,7 @@ type RegistroForm = {
 const emptyRegistro = (): RegistroForm =>
   ({ username: '', email: '', password: '', first_name: '', last_name: '', rol: 'consultor', etnia: '', comunidad: '' })
 
-type EditForm = { email: string; first_name: string; last_name: string; rol: string; password: string; etnia: string; comunidad: string }
+type EditForm = { username: string; email: string; first_name: string; last_name: string; rol: string; password: string; etnia: string; comunidad: string }
 
 function roleBadgeClass(rol: string) {
   if (rol === 'admin') return 'gl-badge--red'
@@ -57,10 +57,11 @@ export default function Usuarios() {
   const [saving, setSaving]         = useState(false)
 
   const [editing, setEditing]   = useState<Usuario | null>(null)
-  const [editForm, setEditForm] = useState<EditForm>({ email: '', first_name: '', last_name: '', rol: '', password: '', etnia: '', comunidad: '' })
+  const [editForm, setEditForm] = useState<EditForm>({ username: '', email: '', first_name: '', last_name: '', rol: '', password: '', etnia: '', comunidad: '' })
   const [editErr, setEditErr]   = useState('')
 
   const [confirmDeactivate, setConfirmDeactivate] = useState<Usuario | null>(null)
+  const [deleteHard, setDeleteHard]               = useState(false)
   const [deactivateErr, setDeactivateErr]         = useState('')
 
   const load = useCallback(async () => {
@@ -109,7 +110,7 @@ export default function Usuarios() {
 
   const openEdit = (u: Usuario) => {
     setEditForm({
-      email: u.email, first_name: u.first_name, last_name: u.last_name,
+      username: u.username, email: u.email, first_name: u.first_name, last_name: u.last_name,
       rol: u.rol, password: '', etnia: u.etnia ?? '', comunidad: u.comunidad ?? '',
     })
     setEditErr(''); setEditing(u)
@@ -121,7 +122,7 @@ export default function Usuarios() {
     setSaving(true); setEditErr('')
     try {
       const body: Record<string, unknown> = {
-        email: editForm.email, first_name: editForm.first_name,
+        username: editForm.username, email: editForm.email, first_name: editForm.first_name,
         last_name: editForm.last_name, rol: editForm.rol,
         etnia: editForm.etnia || null, comunidad: editForm.comunidad,
       }
@@ -137,11 +138,11 @@ export default function Usuarios() {
     if (!confirmDeactivate) return
     setSaving(true); setDeactivateErr('')
     try {
-      await apiFetch(`/auth/usuarios/${confirmDeactivate.id}/`, { method: 'DELETE' })
+      await apiFetch(`/auth/usuarios/${confirmDeactivate.id}/${deleteHard ? '?hard=true' : ''}`, { method: 'DELETE' })
       setConfirmDeactivate(null); load()
     } catch (e) {
       setDeactivateErr(apiErr(e, 'Error al desactivar el usuario.'))
-    } finally { setSaving(false) }
+    } finally { setSaving(false); setDeleteHard(false) }
   }
 
   const handleReactivate = async (u: Usuario) => {
@@ -223,7 +224,7 @@ export default function Usuarios() {
                               className="eg-btn eg-btn--danger"
                               disabled={u.id === currentUser?.id}
                               title={u.id === currentUser?.id ? 'No puedes desactivar tu propia cuenta' : undefined}
-                              onClick={() => { setConfirmDeactivate(u); setDeactivateErr('') }}
+                              onClick={() => { setConfirmDeactivate(u); setDeleteHard(false); setDeactivateErr('') }}
                             >
                               <Ban size={13} /> Desactivar
                             </button>
@@ -232,6 +233,14 @@ export default function Usuarios() {
                               <RotateCcw size={13} /> Reactivar
                             </button>
                           )}
+                          <button
+                            className="eg-btn eg-btn--danger"
+                            disabled={u.id === currentUser?.id}
+                            title={u.id === currentUser?.id ? 'No puedes borrar tu propia cuenta' : undefined}
+                            onClick={() => { setConfirmDeactivate(u); setDeleteHard(true); setDeactivateErr('') }}
+                          >
+                            <Trash2 size={13} /> Borrar
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -300,6 +309,8 @@ export default function Usuarios() {
               <button className="vk-floating-close" onClick={closeEdit} type="button"><X size={18} /></button>
             </div>
             <div className="gl-modal-body">
+              <div className="gl-field"><label className="gl-field-label">Usuario</label>
+                <input className="gl-input" value={editForm.username} onChange={e => setEditForm({ ...editForm, username: e.target.value })} /></div>
               <div className="gl-field"><label className="gl-field-label">Correo</label>
                 <input className="gl-input" type="email" value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} /></div>
               <div className="gl-form-row">
@@ -347,14 +358,16 @@ export default function Usuarios() {
             </div>
             <div className="gl-modal-body">
               <p style={{ fontSize: '.93rem', color: 'var(--gray-700)', lineHeight: 1.6 }}>
-                ¿Desactivar a <strong>{confirmDeactivate.username}</strong>? No podrá iniciar sesión, pero su historial se conserva.
+                {deleteHard
+                  ? <>¿Borrar definitivamente a <strong>{confirmDeactivate.username}</strong>? Esta acción limpia la cuenta creada por error y no conserva el usuario.</>
+                  : <>¿Desactivar a <strong>{confirmDeactivate.username}</strong>? No podrá iniciar sesión, pero su historial se conserva.</>}
               </p>
               {deactivateErr && <div className="gl-form-err"><AlertCircle size={14} />{deactivateErr}</div>}
             </div>
             <div className="gl-modal-footer">
               <button className="eg-btn eg-btn--ghost" onClick={() => setConfirmDeactivate(null)}>Cancelar</button>
               <button className="eg-btn eg-btn--danger" onClick={handleDeactivate} disabled={saving} style={{ background: 'var(--red)', color: '#fff' }}>
-                {saving ? <><Loader2 size={14} className="spin" /> …</> : 'Desactivar'}
+                {saving ? <><Loader2 size={14} className="spin" /> …</> : deleteHard ? 'Borrar definitivamente' : 'Desactivar'}
               </button>
             </div>
           </div>

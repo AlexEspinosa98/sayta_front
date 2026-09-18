@@ -37,6 +37,29 @@ function readStoredUser(): Usuario | null {
   } catch { return null }
 }
 
+function withGestionarRoles(usuario: Usuario): Usuario {
+  const permisos = usuario.permisos
+  if (Array.isArray(permisos)) {
+    const next = permisos.length === 0 || typeof permisos[0] === 'string'
+      ? [...permisos as string[], 'usuarios.gestionar_roles']
+      : [...permisos as Array<{ modulo?: string; modulo_codigo?: string; accion?: string; codigo?: string; permiso?: string }>, { modulo_codigo: 'usuarios', codigo: 'gestionar_roles' }]
+    return { ...usuario, permisos: next }
+  }
+  if (permisos && typeof permisos === 'object') {
+    return {
+      ...usuario,
+      permisos: {
+        ...permisos,
+        usuarios: {
+          ...((permisos as Record<string, unknown>).usuarios as Record<string, unknown> | undefined),
+          gestionar_roles: true,
+        },
+      },
+    }
+  }
+  return { ...usuario, permisos: { usuarios: { gestionar_roles: true } } }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY))
   const [user, setUser]   = useState<Usuario | null>(() => readStoredUser())
@@ -56,6 +79,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(usuario)
   }, [])
 
+  const resolveDynamicAdminAccess = useCallback(async (usuario: Usuario) => {
+    if (resolvePermissions(usuario.rol, usuario.permisos).usuarios.gestionar) return usuario
+    try {
+      await apiFetch('/admin/roles/')
+      return withGestionarRoles(usuario)
+    } catch {
+      return usuario
+    }
+  }, [])
+
   useEffect(() => {
     setUnauthorizedHandler(() => clearSession())
     return () => setUnauthorizedHandler(null)
@@ -66,7 +99,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async function bootstrap() {
       if (!localStorage.getItem(TOKEN_KEY)) { setLoading(false); return }
       try {
-        const perfil = await apiFetch('/auth/perfil/') as Usuario
+        const perfilBase = await apiFetch('/auth/perfil/') as Usuario
+        const perfil = await resolveDynamicAdminAccess(perfilBase)
         if (!cancelled) {
           localStorage.setItem(USER_KEY, JSON.stringify(perfil))
           setUser(perfil)
@@ -79,7 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     bootstrap()
     return () => { cancelled = true }
-  }, [clearSession])
+  }, [clearSession, resolveDynamicAdminAccess])
 
   const login = useCallback(async (username: string, password: string) => {
     try {
@@ -92,11 +126,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         auth: false,
         body: JSON.stringify(loginPayload),
       }) as { token: string; usuario: Usuario }
-      persistSession(data.token, data.usuario)
+      localStorage.setItem(TOKEN_KEY, data.token)
+      const usuario = await resolveDynamicAdminAccess(data.usuario)
+      persistSession(data.token, usuario)
     } catch (e) {
       throw new Error(apiErr(e, 'Credenciales incorrectas.'))
     }
-  }, [persistSession])
+  }, [persistSession, resolveDynamicAdminAccess])
 
   const logout = useCallback(async () => {
     try { await apiFetch('/auth/logout/', { method: 'POST' }) }
@@ -105,10 +141,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [clearSession])
 
   const refreshProfile = useCallback(async () => {
-    const perfil = await apiFetch('/auth/perfil/') as Usuario
+    const perfilBase = await apiFetch('/auth/perfil/') as Usuario
+    const perfil = await resolveDynamicAdminAccess(perfilBase)
     localStorage.setItem(USER_KEY, JSON.stringify(perfil))
     setUser(perfil)
-  }, [])
+  }, [resolveDynamicAdminAccess])
 
   const value: AuthContextType = {
     user, token, loading,

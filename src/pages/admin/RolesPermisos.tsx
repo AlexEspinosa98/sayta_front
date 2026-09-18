@@ -90,6 +90,12 @@ function systemBadge(system?: boolean) {
   return system ? <span className="gl-badge gl-badge--blue">Sistema</span> : <span className="gl-badge gl-badge--gray">Personalizado</span>
 }
 
+function listFromResponse<T>(data: T[] | Record<string, unknown>, key: string): T[] {
+  if (Array.isArray(data)) return data
+  const value = data[key]
+  return Array.isArray(value) ? value as T[] : []
+}
+
 export default function RolesPermisos() {
   const [tab, setTab] = useState<Tab>('roles')
   const [roles, setRoles] = useState<Rol[]>([])
@@ -136,8 +142,21 @@ export default function RolesPermisos() {
         apiFetch('/admin/modulos/') as Promise<Modulo[] | { modulos?: Modulo[] }>,
         apiFetch('/admin/matriz/') as Promise<MatrizResponse>,
       ])
-      const rolesList = Array.isArray(rolesData) ? rolesData : rolesData.roles ?? []
-      const modulosList = Array.isArray(modulosData) ? modulosData : modulosData.modulos ?? []
+      const rolesList = listFromResponse<Rol>(rolesData, 'roles')
+      const baseModulos = listFromResponse<Modulo>(modulosData, 'modulos')
+      const modulosList = await Promise.all(baseModulos.map(async m => {
+        try {
+          const subData = await apiFetch(`/admin/modulos/${m.id}/submodulos/`) as Submodulo[] | { submodulos?: Submodulo[]; results?: Submodulo[] }
+          return {
+            ...m,
+            submodulos: Array.isArray(subData)
+              ? subData
+              : subData.submodulos ?? subData.results ?? m.submodulos ?? [],
+          }
+        } catch {
+          return { ...m, submodulos: m.submodulos ?? [] }
+        }
+      }))
       setRoles(rolesList)
       setModulos(modulosList)
       setMatriz(matrizData)
@@ -478,10 +497,11 @@ function ModulesTable({
               <button className="eg-btn eg-btn--ghost" onClick={() => onCreateModuloPermiso(m.id)}><Plus size={13} /> Permiso</button>
               <button className="eg-btn eg-btn--ghost" onClick={() => onCreateSubmodulo(m.id)}><Plus size={13} /> Submódulo</button>
               <button className="eg-btn eg-btn--danger" disabled={saving} onClick={() => onDelete('modulo', m.id)}><Ban size={13} /> Desactivar</button>
+              <button className="eg-btn eg-btn--danger" disabled={saving} onClick={() => onDelete('modulo', m.id, true)}><Trash2 size={13} /> Borrar definitivo</button>
             </div>
           </div>
 
-          <PermissionChips permissions={m.permisos ?? []} onEdit={onEditPermiso} onDelete={(id) => onDelete('permiso', id)} />
+          <PermissionChips permissions={m.permisos ?? []} onEdit={onEditPermiso} onDelete={(id, hard) => onDelete('permiso', id, hard)} />
 
           <div className="rmp-submodule-list">
             {(m.submodulos ?? []).map(s => (
@@ -496,10 +516,11 @@ function ModulesTable({
                     <button className="eg-btn eg-btn--ghost" onClick={() => onEditSubmodulo(s)}><Edit2 size={13} /> Editar</button>
                     <button className="eg-btn eg-btn--ghost" onClick={() => onCreateSubmoduloPermiso(s.id)}><Plus size={13} /> Permiso</button>
                     <button className="eg-btn eg-btn--danger" disabled={saving} onClick={() => onDelete('submodulo', s.id)}><Ban size={13} /> Desactivar</button>
+                    <button className="eg-btn eg-btn--danger" disabled={saving} onClick={() => onDelete('submodulo', s.id, true)}><Trash2 size={13} /> Borrar definitivo</button>
                   </div>
                 </div>
                 <p className="rmp-submodule-desc">{s.descripcion || 'Sin descripción'}</p>
-                <PermissionChips permissions={s.permisos ?? []} onEdit={onEditPermiso} onDelete={(id) => onDelete('permiso', id)} />
+                <PermissionChips permissions={s.permisos ?? []} onEdit={onEditPermiso} onDelete={(id, hard) => onDelete('permiso', id, hard)} />
               </div>
             ))}
           </div>
@@ -514,7 +535,7 @@ function PermissionChips({
 }: {
   permissions: Permiso[]
   onEdit: (permiso: Permiso) => void
-  onDelete: (id: number) => void
+  onDelete: (id: number, hard?: boolean) => void
 }) {
   if (permissions.length === 0) return <p className="rmp-empty-line">Sin permisos directos.</p>
   return (
@@ -525,6 +546,7 @@ function PermissionChips({
           {p.codigo}
           <button type="button" onClick={() => onEdit(p)} aria-label={`Editar permiso ${p.codigo}`}><Edit2 size={11} /></button>
           <button type="button" onClick={() => onDelete(p.id)} aria-label={`Desactivar permiso ${p.codigo}`}><Ban size={11} /></button>
+          <button type="button" onClick={() => onDelete(p.id, true)} aria-label={`Borrar definitivamente permiso ${p.codigo}`}><Trash2 size={11} /></button>
         </span>
       ))}
     </div>
