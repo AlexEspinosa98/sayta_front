@@ -40,7 +40,7 @@ export default function Layout() {
       (path.startsWith('/traductor') && permissions.traduccion) ||
       (path.startsWith('/glosario') && permissions.glosario.leer) ||
       (path.startsWith('/entrenamiento') && permissions.modelosAsr.leer) ||
-      (path.startsWith('/etiquetado') && permissions.datasetAudio.leer) ||
+      ((path.startsWith('/dataset-audios') || path.startsWith('/dataset_audio') || path.startsWith('/etiquetado')) && permissions.datasetAudio.leer) ||
       (path.startsWith('/admin') && permissions.usuarios.gestionar)
     if (!allowed) navigate('/', { replace: true })
   }, [isAuthenticated, location.pathname, navigate, permissions])
@@ -126,8 +126,8 @@ export default function Layout() {
               )}
               {isAuthenticated && permissions.datasetAudio.leer && (
                 <li>
-                  <NavLink to="/etiquetado" className={navLinkClass} onClick={closeMenu}>
-                    <Tag size={16} aria-hidden="true" /><span>Etiquetado</span>
+                  <NavLink to="/dataset-audios" className={navLinkClass} onClick={closeMenu}>
+                    <Tag size={16} aria-hidden="true" /><span>Dataset</span>
                   </NavLink>
                 </li>
               )}

@@ -835,7 +835,7 @@ function EtiquetadoApp({ canEtiquetar }: { canEtiquetar: boolean }) {
     <div className="eg-page">
       <div className="eg-page-header">
         <div className="container">
-          <h1 className="eg-page-title"><Mic size={22} aria-hidden="true" /> Panel de Etiquetado</h1>
+          <h1 className="eg-page-title"><Mic size={22} aria-hidden="true" /> Dataset de Audios</h1>
           <p className="eg-page-sub">
             Gestión y estadísticas del corpus de audio SAYTA
             {!canEtiquetar && ' · modo solo lectura'}

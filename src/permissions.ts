@@ -53,13 +53,10 @@ const GESTOR: Permissions = {
 }
 
 const ANOTADOR: Permissions = {
-  ...GESTOR,
-  glosario: { leer: true, crear: false, editar: false, eliminar: false, cargaMasiva: false },
-  embeddings: { leer: true, generarActivar: false },
-  modelosAsr: {
-    leer: true, descargar: false, entrenar: false, activarCancelar: false,
-    liberarMemoria: false, verProgreso: true, reiniciarBackend: false,
-  },
+  ...NONE,
+  datasetAudio: { leer: true, subir: true, etiquetar: true },
+  transcripcion: true,
+  traduccion: true,
 }
 
 const CONSULTOR: Permissions = {
@@ -67,17 +64,24 @@ const CONSULTOR: Permissions = {
   glosario: { ...NONE.glosario, leer: true },
   embeddings: { ...NONE.embeddings, leer: true },
   datasetAudio: { ...NONE.datasetAudio, leer: true },
-  modelosAsr: { ...NONE.modelosAsr, leer: true },
+  modelosAsr: {
+    leer: true, descargar: false, entrenar: false, activarCancelar: false,
+    liberarMemoria: false, verProgreso: true, reiniciarBackend: false,
+  },
   transcripcion: true,
   traduccion: true,
 }
 
-// Colaborador de comunidad (kogui/arhuaco): solo ver/etiquetar audios y
-// editar el glosario — nunca crear, eliminar, ni acceder a ASR/traducción.
+// Colaborador de comunidad (kogui/arhuaco): ver/etiquetar audios, editar el
+// glosario y consultar catálogos que la matriz semilla marca como visibles.
 const COLABORADOR_LENGUA: Permissions = {
   ...NONE,
   glosario: { leer: true, crear: false, editar: true, eliminar: false, cargaMasiva: false },
+  embeddings: { ...NONE.embeddings, leer: true },
   datasetAudio: { leer: true, subir: false, etiquetar: true },
+  modelosAsr: { ...NONE.modelosAsr, leer: true },
+  transcripcion: true,
+  traduccion: true,
 }
 
 // Rol por defecto del auto-registro público (`POST /api/auth/registro-publico/`).
@@ -154,9 +158,9 @@ function applyPermission(target: Permissions, moduloRaw: string, actionRaw: stri
 
   if (modulo === 'modelos_asr') {
     if (action === 'ver' || action === 'leer') target.modelosAsr.leer = true
-    if (action === 'descargar') target.modelosAsr.descargar = true
+    if (['descargar', 'descargar_modelo'].includes(action)) target.modelosAsr.descargar = true
     if (action === 'entrenar') target.modelosAsr.entrenar = true
-    if (['activar_cancelar', 'activar', 'cancelar'].includes(action)) target.modelosAsr.activarCancelar = true
+    if (['activar_cancelar', 'activar', 'cancelar', 'activar_experimento', 'cancelar_experimento'].includes(action)) target.modelosAsr.activarCancelar = true
     if (action === 'liberar_memoria') target.modelosAsr.liberarMemoria = true
     if (action === 'ver_progreso') target.modelosAsr.verProgreso = true
     if (action === 'reiniciar_backend') target.modelosAsr.reiniciarBackend = true
@@ -170,7 +174,7 @@ function applyPermission(target: Permissions, moduloRaw: string, actionRaw: stri
     target.traduccion = true
   }
 
-  if (modulo === 'usuarios' && ['gestionar_roles', 'gestionar', 'ver', 'leer'].includes(action)) {
+  if (modulo === 'usuarios' && ['gestionar_roles', 'gestionar'].includes(action)) {
     target.usuarios.gestionar = true
   }
 }

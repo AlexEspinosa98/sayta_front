@@ -38,6 +38,8 @@ export default function App() {
             <Route path="/entrenamiento" element={<Entrenamiento />} />
           </Route>
           <Route element={<RequireAuth check={p => p.datasetAudio.leer} />}>
+            <Route path="/dataset-audios" element={<Etiquetado />} />
+            <Route path="/dataset_audio" element={<Etiquetado />} />
             <Route path="/etiquetado" element={<Etiquetado />} />
           </Route>
           <Route element={<RequireAuth check={p => p.usuarios.gestionar} />}>

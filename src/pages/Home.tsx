@@ -23,8 +23,8 @@ export default function Home() {
     },
     permissions.datasetAudio.leer && {
       icon: <Tag size={22} />,
-      title: 'Etiquetado colaborativo',
-      desc: 'Herramienta para etiquetar y validar corpus de audio según los permisos asignados.',
+      title: 'Dataset de Audios',
+      desc: 'Consulta, carga y etiquetado de audios según los permisos asignados al rol.',
     },
   ].filter(Boolean) as Array<{ icon: JSX.Element; title: string; desc: string }>
 
@@ -92,7 +92,7 @@ export default function Home() {
               { icon: <Languages size={22} />, title: 'Traducción semántica', desc: 'Búsqueda por similitud usando embeddings entrenados con vocabulario de lenguas indígenas.' },
               { icon: <Cpu size={22} />, title: 'Reconocimiento de voz', desc: 'Transcripción automática de audio en lengua indígena mediante modelos de habla entrenados.' },
               { icon: <BookOpen size={22} />, title: 'Glosario digital', desc: 'Base de datos terminológica bilingüe con términos, definiciones y equivalencias.' },
-              { icon: <Tag size={22} />, title: 'Etiquetado colaborativo', desc: 'Herramienta para etiquetar y validar corpus de audio.' },
+              { icon: <Tag size={22} />, title: 'Dataset de Audios', desc: 'Consulta, carga y etiquetado de audios.' },
             ]).map(feature => (
               <div className="home-feature" role="listitem" key={feature.title}>
                 <span className="home-feature-icon" aria-hidden="true">{feature.icon}</span>
