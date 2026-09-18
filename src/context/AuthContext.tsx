@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef, type ReactNode } from 'react'
-import { apiFetch, apiErr, setUnauthorizedHandler, TOKEN_KEY } from '../api'
+import { apiFetch, apiErr, setForbiddenHandler, setUnauthorizedHandler, TOKEN_KEY } from '../api'
 import { resolvePermissions, type DynamicPermissionInput, type Permissions } from '../permissions'
 
 const USER_KEY = 'sayta_user'
@@ -14,7 +14,15 @@ export interface Usuario {
   rol: string
   rol_display: string
   date_joined: string
+  etnia?: string | null
+  etnia_display?: string | null
+  comunidad?: string | null
   permisos?: DynamicPermissionInput
+}
+
+interface PermisosResponse {
+  usuario: Usuario
+  permisos: DynamicPermissionInput
 }
 
 interface AuthContextType {
@@ -71,9 +79,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (refreshInFlight.current) return refreshInFlight.current
 
-    const request = apiFetch('/auth/perfil/')
-      .then(perfil => {
-        const usuario = perfil as Usuario
+    const request = apiFetch('/auth/permisos/', { refreshOnForbidden: false })
+      .then(data => {
+        const permisosData = data as PermisosResponse
+        const usuario = { ...permisosData.usuario, permisos: permisosData.permisos }
         localStorage.setItem(USER_KEY, JSON.stringify(usuario))
         setToken(currentToken)
         setUser(usuario)
@@ -86,6 +95,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshInFlight.current = request
     return request
   }, [clearSession])
+
+  useEffect(() => {
+    setForbiddenHandler(() => {
+      if (localStorage.getItem(TOKEN_KEY)) refreshProfile().catch(() => clearSession())
+    })
+    return () => setForbiddenHandler(null)
+  }, [clearSession, refreshProfile])
 
   useEffect(() => {
     let cancelled = false
@@ -151,10 +167,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify(loginPayload),
       }) as { token: string; usuario: Usuario }
       persistSession(data.token, data.usuario)
+      await refreshProfile()
     } catch (e) {
       throw new Error(apiErr(e, 'Credenciales incorrectas.'))
     }
-  }, [persistSession])
+  }, [persistSession, refreshProfile])
 
   const logout = useCallback(async () => {
     try { await apiFetch('/auth/logout/', { method: 'POST' }) }

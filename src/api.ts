@@ -3,13 +3,20 @@ export const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? 
 export const TOKEN_KEY = 'sayta_token'
 
 type UnauthorizedHandler = () => void
+type ForbiddenHandler = () => void
 let onUnauthorized: UnauthorizedHandler | null = null
+let onForbidden: ForbiddenHandler | null = null
 
-type ApiFetchOptions = RequestInit & { auth?: boolean }
+type ApiFetchOptions = RequestInit & { auth?: boolean; refreshOnForbidden?: boolean }
 
 /** Registrado por AuthProvider al montar — se dispara ante cualquier 401. */
 export function setUnauthorizedHandler(fn: UnauthorizedHandler | null) {
   onUnauthorized = fn
+}
+
+/** Registrado por AuthProvider al montar — refresca permisos ante cualquier 403. */
+export function setForbiddenHandler(fn: ForbiddenHandler | null) {
+  onForbidden = fn
 }
 
 export async function apiFetch(path: string, opts?: ApiFetchOptions) {
@@ -28,6 +35,10 @@ export async function apiFetch(path: string, opts?: ApiFetchOptions) {
 
   if (res.status === 401) {
     onUnauthorized?.()
+  }
+
+  if (res.status === 403 && opts?.refreshOnForbidden !== false) {
+    onForbidden?.()
   }
 
   if (res.status === 204) return null
