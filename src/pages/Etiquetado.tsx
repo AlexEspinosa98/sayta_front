@@ -5,9 +5,8 @@ import {
   Music, BookOpen, Tag, Check, Trash2, Edit2, X, ArrowLeft,
   ChevronDown, Clock, Eye,
 } from 'lucide-react'
+import { API_BASE, TOKEN_KEY, apiErr, apiFetch } from '../api'
 import { useAuth } from '../context/AuthContext'
-
-const API = (import.meta.env.VITE_API_URL as string | undefined) ?? ''
 
 /* ═══════════════════════════════════════════════════════
    TYPES
@@ -76,6 +75,68 @@ type NavState =
 
 type LabelMode = 'idle' | 'editing' | 'saving' | 'deleting'
 
+function getGrabacionesPath(...parts: string[]) {
+  return `/grabaciones/${parts.map(encodeURIComponent).join('/')}${parts.length ? '/' : ''}`
+}
+
+function getAudioUrl(community: string, session: string, audioName: string) {
+  return `${API_BASE}${getGrabacionesPath(community, session, 'audios', audioName)}`
+}
+
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem(TOKEN_KEY)
+  return token ? { Authorization: `Token ${token}` } : {}
+}
+
+function AuthenticatedAudio({ src, label }: { src: string; label: string }) {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    let objectUrl: string | null = null
+
+    async function loadAudio() {
+      setLoading(true)
+      setError(null)
+      setBlobUrl(null)
+      try {
+        const res = await fetch(src, { headers: getAuthHeaders() })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const blob = await res.blob()
+        objectUrl = URL.createObjectURL(blob)
+        if (!cancelled) setBlobUrl(objectUrl)
+      } catch {
+        if (!cancelled) setError('No se pudo cargar el audio.')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    loadAudio()
+
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [src])
+
+  if (loading) {
+    return <div className="eg-loading"><RefreshCw size={16} className="spin" aria-hidden="true" /> Cargando audio...</div>
+  }
+
+  if (error) {
+    return <div className="eg-alert" role="alert"><AlertCircle size={16} aria-hidden="true" /> {error}</div>
+  }
+
+  return (
+    <audio controls src={blobUrl ?? undefined} className="eg-audio-player" aria-label={label}>
+      Tu navegador no soporta el elemento audio.
+    </audio>
+  )
+}
+
 /* ═══════════════════════════════════════════════════════
    STAT CARD
 ═══════════════════════════════════════════════════════ */
@@ -108,15 +169,13 @@ function StatsDashboard() {
   const fetchStats = useCallback(async () => {
     setLoading(true); setError(null)
     try {
-      const res = await fetch(`${API}/api/grabaciones/`)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
+      const data = await apiFetch('/grabaciones/')
       const list: CommunityStats[] = Array.isArray(data)
         ? data
         : Array.isArray(data.comunidades) ? data.comunidades : []
       setStats(list)
-    } catch {
-      setError('No se pudieron cargar las estadísticas.')
+    } catch (e) {
+      setError(apiErr(e, 'No se pudieron cargar las estadísticas.'))
     } finally {
       setLoading(false)
     }
@@ -192,13 +251,11 @@ function SessionList({ onSelect }: { onSelect: (community: string, session: stri
   const fetchJornadas = useCallback(async (c: Community) => {
     setLoading(true); setError(null); setJornadas([])
     try {
-      const res = await fetch(`${API}/api/grabaciones/${c}/`)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
+      const data = await apiFetch(getGrabacionesPath(c))
       const list: Jornada[] = data.jornadas ?? data.sesiones ?? (Array.isArray(data) ? data : [])
       setJornadas(list)
-    } catch {
-      setError(`No se pudieron cargar las jornadas de ${c}.`)
+    } catch (e) {
+      setError(apiErr(e, `No se pudieron cargar las jornadas de ${c}.`))
     } finally {
       setLoading(false)
     }
@@ -360,10 +417,9 @@ function GlossaryModal({ community, session, onClose }: {
   useEffect(() => {
     let cancelled = false
     setLoading(true); setError(null)
-    fetch(`${API}/api/grabaciones/${community}/${session}/glosario/`)
-      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
+    apiFetch(getGrabacionesPath(community, session, 'glosario'))
       .then((d: GlosarioResponse) => { if (!cancelled) setData(d) })
-      .catch(() => { if (!cancelled) setError('No se pudo cargar el glosario.') })
+      .catch(e => { if (!cancelled) setError(apiErr(e, 'No se pudo cargar el glosario.')) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [community, session])
@@ -454,7 +510,7 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
   const [inputVal, setInputVal] = useState(audio.etiqueta ?? '')
   const [apiError, setApiError] = useState<string | null>(null)
 
-  const audioUrl  = `${API}/api/grabaciones/${community}/${session}/audios/${encodeURIComponent(audio.nombre)}`
+  const audioUrl  = getAudioUrl(community, session, audio.nombre)
   const isLabeled = audio.etiquetado
   const isBusy    = mode === 'saving' || mode === 'deleting'
   const inputId   = `lbl-${audio.nombre.replace(/[^a-z0-9]/gi, '-')}`
@@ -466,26 +522,21 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
     if (!inputVal.trim()) return
     setMode('saving'); setApiError(null)
     try {
-      let res: Response
       if (isLabeled) {
-        res = await fetch(
-          `${API}/api/grabaciones/${community}/${session}/etiqueta/${encodeURIComponent(audio.nombre)}/`,
-          { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ etiqueta: inputVal.trim() }) }
+        await apiFetch(
+          getGrabacionesPath(community, session, 'etiqueta', audio.nombre),
+          { method: 'PUT', body: JSON.stringify({ etiqueta: inputVal.trim() }) }
         )
       } else {
-        res = await fetch(
-          `${API}/api/grabaciones/${community}/${session}/etiquetar/`,
-          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre_audio: audio.nombre, etiqueta: inputVal.trim() }) }
+        await apiFetch(
+          getGrabacionesPath(community, session, 'etiquetar'),
+          { method: 'POST', body: JSON.stringify({ nombre_audio: audio.nombre, etiqueta: inputVal.trim() }) }
         )
-      }
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({})) as { error?: string }
-        throw new Error(err.error ?? `HTTP ${res.status}`)
       }
       setMode('idle')
       onLabelChange()
     } catch (e) {
-      setApiError(e instanceof Error ? e.message : 'Error al guardar')
+      setApiError(apiErr(e, 'Error al guardar'))
       setMode(isLabeled ? 'editing' : 'idle')
     }
   }
@@ -493,16 +544,12 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
   async function handleDelete() {
     setMode('deleting'); setApiError(null)
     try {
-      const res = await fetch(
-        `${API}/api/grabaciones/${community}/${session}/etiqueta/${encodeURIComponent(audio.nombre)}/`,
-        { method: 'DELETE' }
-      )
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      await apiFetch(getGrabacionesPath(community, session, 'etiqueta', audio.nombre), { method: 'DELETE' })
       setInputVal('')
       setMode('idle')
       onLabelChange()
     } catch (e) {
-      setApiError(e instanceof Error ? e.message : 'Error al eliminar')
+      setApiError(apiErr(e, 'Error al eliminar'))
       setMode('idle')
     }
   }
@@ -535,9 +582,7 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
       {isExpanded && (
         <div id={`audio-body-${audio.nombre}`} className="eg-audio-body">
           {/* HU-16: native audio player */}
-          <audio controls src={audioUrl} className="eg-audio-player" aria-label={`Reproducir ${audio.nombre}`}>
-            Tu navegador no soporta el elemento audio.
-          </audio>
+          <AuthenticatedAudio src={audioUrl} label={`Reproducir ${audio.nombre}`} />
 
           {/* Label form */}
           <div className="eg-label-form">
@@ -646,21 +691,19 @@ function SessionWorkspace({ community, session, onBack, canEtiquetar }: {
     setLoading(true); setError(null)
     try {
       // Required: audio list
-      const audiosRes = await fetch(`${API}/api/grabaciones/${community}/${session}/audios/`)
-      if (!audiosRes.ok) throw new Error(`HTTP ${audiosRes.status}`)
-      const audiosData = await audiosRes.json()
+      const audiosData = await apiFetch(getGrabacionesPath(community, session, 'audios'))
 
       // Optional: estado + glosario in parallel
       const [estadoRes, glosRes] = await Promise.all([
-        fetch(`${API}/api/grabaciones/${community}/${session}/estado/`).catch(() => null),
-        fetch(`${API}/api/grabaciones/${community}/${session}/glosario/`).catch(() => null),
+        apiFetch(getGrabacionesPath(community, session, 'estado')).catch(() => null),
+        apiFetch(getGrabacionesPath(community, session, 'glosario')).catch(() => null),
       ])
 
       let estadoData: EstadoResponse | null = null
-      if (estadoRes?.ok) estadoData = await estadoRes.json()
+      if (estadoRes) estadoData = estadoRes as EstadoResponse
 
-      if (glosRes?.ok) {
-        const glosData: GlosarioResponse = await glosRes.json()
+      if (glosRes) {
+        const glosData = glosRes as GlosarioResponse
         setGlossaryCategories(glosData.categorias ?? [])
       }
 
@@ -683,9 +726,7 @@ function SessionWorkspace({ community, session, onBack, canEtiquetar }: {
   // Silent refresh after label change — only re-fetches estado, no spinner
   const refreshEstado = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/api/grabaciones/${community}/${session}/estado/`)
-      if (!res.ok) return
-      const data: EstadoResponse = await res.json()
+      const data = await apiFetch(getGrabacionesPath(community, session, 'estado')) as EstadoResponse
       setEstado(data)
       const labelMap = new Map<string, string>()
       for (const e of (data.etiquetados ?? [])) labelMap.set(e.audio, e.etiqueta)
