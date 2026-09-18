@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, useRef, type ReactNode } from 'react'
 import { apiFetch, apiErr, setUnauthorizedHandler, TOKEN_KEY } from '../api'
 import { resolvePermissions, type DynamicPermissionInput, type Permissions } from '../permissions'
 
@@ -25,7 +25,7 @@ interface AuthContextType {
   isAuthenticated: boolean
   login: (username: string, password: string) => Promise<void>
   logout: () => Promise<void>
-  refreshProfile: () => Promise<void>
+  refreshProfile: () => Promise<Usuario>
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
@@ -41,6 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY))
   const [user, setUser]   = useState<Usuario | null>(() => readStoredUser())
   const [loading, setLoading] = useState(true)
+  const refreshInFlight = useRef<Promise<Usuario> | null>(null)
 
   const clearSession = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY)
@@ -61,16 +62,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => setUnauthorizedHandler(null)
   }, [clearSession])
 
+  const refreshProfile = useCallback(async () => {
+    const currentToken = localStorage.getItem(TOKEN_KEY)
+    if (!currentToken) {
+      clearSession()
+      throw new Error('No hay sesión activa.')
+    }
+
+    if (refreshInFlight.current) return refreshInFlight.current
+
+    const request = apiFetch('/auth/perfil/')
+      .then(perfil => {
+        const usuario = perfil as Usuario
+        localStorage.setItem(USER_KEY, JSON.stringify(usuario))
+        setToken(currentToken)
+        setUser(usuario)
+        return usuario
+      })
+      .finally(() => {
+        refreshInFlight.current = null
+      })
+
+    refreshInFlight.current = request
+    return request
+  }, [clearSession])
+
   useEffect(() => {
     let cancelled = false
     async function bootstrap() {
       if (!localStorage.getItem(TOKEN_KEY)) { setLoading(false); return }
       try {
-        const perfil = await apiFetch('/auth/perfil/') as Usuario
-        if (!cancelled) {
-          localStorage.setItem(USER_KEY, JSON.stringify(perfil))
-          setUser(perfil)
-        }
+        if (!cancelled) await refreshProfile()
       } catch {
         if (!cancelled) clearSession()
       } finally {
@@ -79,7 +101,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     bootstrap()
     return () => { cancelled = true }
-  }, [clearSession])
+  }, [clearSession, refreshProfile])
+
+  useEffect(() => {
+    if (!token) return
+
+    const revalidate = () => {
+      if (!localStorage.getItem(TOKEN_KEY)) {
+        clearSession()
+        return
+      }
+      refreshProfile().catch(() => clearSession())
+    }
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') revalidate()
+    }
+
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === TOKEN_KEY && !event.newValue) {
+        clearSession()
+        return
+      }
+      if (event.key === TOKEN_KEY || event.key === USER_KEY) revalidate()
+    }
+
+    window.addEventListener('focus', revalidate)
+    window.addEventListener('pageshow', revalidate)
+    window.addEventListener('storage', onStorage)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
+    return () => {
+      window.removeEventListener('focus', revalidate)
+      window.removeEventListener('pageshow', revalidate)
+      window.removeEventListener('storage', onStorage)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [clearSession, refreshProfile, token])
 
   const login = useCallback(async (username: string, password: string) => {
     try {
@@ -103,12 +161,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     catch { /* logout es idempotente — igual limpiamos la sesión local */ }
     finally { clearSession() }
   }, [clearSession])
-
-  const refreshProfile = useCallback(async () => {
-    const perfil = await apiFetch('/auth/perfil/') as Usuario
-    localStorage.setItem(USER_KEY, JSON.stringify(perfil))
-    setUser(perfil)
-  }, [])
 
   const value: AuthContextType = {
     user, token, loading,

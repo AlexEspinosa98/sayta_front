@@ -1,16 +1,33 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { BookOpen, Home, Library, Activity, Tag, LogOut, LogIn, Languages, Menu, X, Users, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { resolvePermissions, type Permissions } from '../permissions'
 
 const ESCUDO = '/Assets/logos/unimagdalena-escudo.png'
 const SAYTA_LOGO = '/Assets/logos/sayta-logo.svg'
+
+function canAccessPath(path: string, permissions: Permissions) {
+  return (
+    path === '/' ||
+    path === '/acerca' ||
+    path === '/login' ||
+    path === '/registro' ||
+    path === '/setup' ||
+    (path.startsWith('/traductor') && permissions.traduccion) ||
+    (path.startsWith('/glosario') && permissions.glosario.leer) ||
+    (path.startsWith('/entrenamiento') && permissions.modelosAsr.leer) ||
+    ((path.startsWith('/dataset-audios') || path.startsWith('/dataset_audio') || path.startsWith('/etiquetado')) && permissions.datasetAudio.leer) ||
+    (path.startsWith('/admin') && permissions.usuarios.gestionar)
+  )
+}
 
 export default function Layout() {
   const { isAuthenticated, user, permissions, logout, refreshProfile } = useAuth()
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
   const location = useLocation()
+  const routeValidationPending = useRef(false)
 
   const closeMenu = () => setMenuOpen(false)
 
@@ -22,27 +39,29 @@ export default function Layout() {
   useEffect(() => {
     if (!isAuthenticated) return
     let cancelled = false
-    refreshProfile().catch(() => {
-      if (!cancelled) navigate('/login', { replace: true, state: { from: location.pathname } })
-    })
-    return () => { cancelled = true }
+    routeValidationPending.current = true
+    refreshProfile()
+      .then(freshUser => {
+        if (cancelled) return
+        const freshPermissions = resolvePermissions(freshUser.rol, freshUser.permisos)
+        if (!canAccessPath(location.pathname, freshPermissions)) navigate('/', { replace: true })
+      })
+      .catch(() => {
+        if (!cancelled) navigate('/login', { replace: true, state: { from: location.pathname } })
+      })
+      .finally(() => {
+        if (!cancelled) routeValidationPending.current = false
+      })
+    return () => {
+      cancelled = true
+      routeValidationPending.current = false
+    }
   }, [isAuthenticated, location.pathname, navigate, refreshProfile])
 
   useEffect(() => {
     if (!isAuthenticated) return
-    const path = location.pathname
-    const allowed =
-      path === '/' ||
-      path === '/acerca' ||
-      path === '/login' ||
-      path === '/registro' ||
-      path === '/setup' ||
-      (path.startsWith('/traductor') && permissions.traduccion) ||
-      (path.startsWith('/glosario') && permissions.glosario.leer) ||
-      (path.startsWith('/entrenamiento') && permissions.modelosAsr.leer) ||
-      ((path.startsWith('/dataset-audios') || path.startsWith('/dataset_audio') || path.startsWith('/etiquetado')) && permissions.datasetAudio.leer) ||
-      (path.startsWith('/admin') && permissions.usuarios.gestionar)
-    if (!allowed) navigate('/', { replace: true })
+    if (routeValidationPending.current) return
+    if (!canAccessPath(location.pathname, permissions)) navigate('/', { replace: true })
   }, [isAuthenticated, location.pathname, navigate, permissions])
 
   // Cerrar con Escape y bloquear scroll de fondo cuando está abierto
