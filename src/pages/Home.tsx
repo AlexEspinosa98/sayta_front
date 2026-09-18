@@ -5,6 +5,28 @@ import { useAuth } from '../context/AuthContext'
 export default function Home() {
   const { isAuthenticated, permissions } = useAuth()
   const navigate = useNavigate()
+  const features = [
+    permissions.traduccion && {
+      icon: <Languages size={22} />,
+      title: 'Traducción semántica',
+      desc: 'Búsqueda por similitud usando embeddings entrenados con vocabulario de lenguas indígenas.',
+    },
+    permissions.transcripcion && {
+      icon: <Cpu size={22} />,
+      title: 'Reconocimiento de voz',
+      desc: 'Transcripción automática de audio en lengua indígena mediante modelos de habla entrenados.',
+    },
+    permissions.glosario.leer && {
+      icon: <BookOpen size={22} />,
+      title: 'Glosario digital',
+      desc: 'Base de datos terminológica bilingüe con términos, definiciones y equivalencias.',
+    },
+    permissions.datasetAudio.leer && {
+      icon: <Tag size={22} />,
+      title: 'Etiquetado colaborativo',
+      desc: 'Herramienta para etiquetar y validar corpus de audio según los permisos asignados.',
+    },
+  ].filter(Boolean) as Array<{ icon: JSX.Element; title: string; desc: string }>
 
   return (
     <section className="home-page" aria-labelledby="home-heading">
@@ -64,40 +86,22 @@ export default function Home() {
         </header>
 
         {/* ── Características ──────────────────────────────── */}
-        <div className="home-features" role="list">
-          <div className="home-feature" role="listitem">
-            <span className="home-feature-icon" aria-hidden="true"><Languages size={22} /></span>
-            <h2 className="home-feature-title">Traducción semántica</h2>
-            <p className="home-feature-desc">
-              Búsqueda por similitud usando embeddings entrenados con vocabulario de lenguas
-              indígenas como el Chimila y otras del Caribe colombiano.
-            </p>
+        {(!isAuthenticated || features.length > 0) && (
+          <div className="home-features" role="list">
+            {(isAuthenticated ? features : [
+              { icon: <Languages size={22} />, title: 'Traducción semántica', desc: 'Búsqueda por similitud usando embeddings entrenados con vocabulario de lenguas indígenas.' },
+              { icon: <Cpu size={22} />, title: 'Reconocimiento de voz', desc: 'Transcripción automática de audio en lengua indígena mediante modelos de habla entrenados.' },
+              { icon: <BookOpen size={22} />, title: 'Glosario digital', desc: 'Base de datos terminológica bilingüe con términos, definiciones y equivalencias.' },
+              { icon: <Tag size={22} />, title: 'Etiquetado colaborativo', desc: 'Herramienta para etiquetar y validar corpus de audio.' },
+            ]).map(feature => (
+              <div className="home-feature" role="listitem" key={feature.title}>
+                <span className="home-feature-icon" aria-hidden="true">{feature.icon}</span>
+                <h2 className="home-feature-title">{feature.title}</h2>
+                <p className="home-feature-desc">{feature.desc}</p>
+              </div>
+            ))}
           </div>
-          <div className="home-feature" role="listitem">
-            <span className="home-feature-icon" aria-hidden="true"><Cpu size={22} /></span>
-            <h2 className="home-feature-title">Reconocimiento de voz</h2>
-            <p className="home-feature-desc">
-              Transcripción automática de audio en lengua indígena mediante modelos
-              de habla entrenados con datos de campo recopilados por investigadores.
-            </p>
-          </div>
-          <div className="home-feature" role="listitem">
-            <span className="home-feature-icon" aria-hidden="true"><BookOpen size={22} /></span>
-            <h2 className="home-feature-title">Glosario digital</h2>
-            <p className="home-feature-desc">
-              Base de datos terminológica bilingüe con términos, definiciones y
-              equivalencias español–lengua indígena, gestionada en línea.
-            </p>
-          </div>
-          <div className="home-feature" role="listitem">
-            <span className="home-feature-icon" aria-hidden="true"><Tag size={22} /></span>
-            <h2 className="home-feature-title">Etiquetado colaborativo</h2>
-            <p className="home-feature-desc">
-              Herramienta para que investigadores y hablantes nativos etiqueten
-              y validen corpus de audio, mejorando continuamente los modelos.
-            </p>
-          </div>
-        </div>
+        )}
 
         {/* ── Pie informativo ──────────────────────────────── */}
         <p className="home-footer-note">

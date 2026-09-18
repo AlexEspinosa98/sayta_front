@@ -2,12 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   AlertCircle, Ban, Boxes, CheckCircle2, Edit2, KeyRound, Layers3, Loader2,
-  Plus, RefreshCw, RotateCcw, Save, ShieldCheck, SlidersHorizontal, Trash2, X,
-  Users,
+  Plus, RefreshCw, RotateCcw, Save, ShieldCheck, Trash2, X,
+  Users, Table2,
 } from 'lucide-react'
 import { apiErr, apiFetch } from '../../api'
+import { useAuth } from '../../context/AuthContext'
 
-type Tab = 'roles' | 'modulos' | 'matriz'
+type Tab = 'roles' | 'modulos' | 'submodulos' | 'permisos' | 'matriz'
 
 interface Rol {
   id: number
@@ -97,6 +98,7 @@ function listFromResponse<T>(data: T[] | Record<string, unknown>, key: string): 
 }
 
 export default function RolesPermisos() {
+  const { refreshProfile } = useAuth()
   const [tab, setTab] = useState<Tab>('roles')
   const [roles, setRoles] = useState<Rol[]>([])
   const [modulos, setModulos] = useState<Modulo[]>([])
@@ -133,6 +135,14 @@ export default function RolesPermisos() {
   }, [modulos])
 
   const selectedRole = roles.find(r => r.id === selectedRoleId) ?? null
+  const allSubmodules = useMemo(() => (
+    modulos.flatMap(m => (m.submodulos ?? []).map(s => ({
+      ...s,
+      modulo_id: m.id,
+      modulo_nombre: m.nombre,
+      modulo_codigo: m.codigo,
+    })))
+  ), [modulos])
 
   const loadCatalogs = useCallback(async () => {
     setLoading(true); setError(''); setNotice('')
@@ -255,6 +265,7 @@ export default function RolesPermisos() {
       closeModal()
       setNotice('Cambios guardados.')
       await loadCatalogs()
+      await refreshProfile()
     } catch (e) {
       setError(apiErr(e, 'No se pudo guardar.'))
     } finally {
@@ -274,6 +285,7 @@ export default function RolesPermisos() {
       await apiFetch(`${paths[kind]}${hard ? '?hard=true' : ''}`, { method: 'DELETE' })
       setNotice(hard ? 'Registro borrado definitivamente.' : 'Registro desactivado.')
       await loadCatalogs()
+      await refreshProfile()
     } catch (e) {
       setError(apiErr(e, 'No se pudo eliminar o desactivar.'))
     } finally {
@@ -291,6 +303,7 @@ export default function RolesPermisos() {
       })
       setNotice(`Permisos actualizados para ${selectedRole.nombre}.`)
       await loadCatalogs()
+      await refreshProfile()
     } catch (e) {
       setError(apiErr(e, 'No se pudo actualizar la matriz del rol.'))
     } finally {
@@ -329,7 +342,9 @@ export default function RolesPermisos() {
           <div className="gl-tabs" role="tablist" aria-label="Administración de permisos">
             <button className={`gl-tab ${tab === 'roles' ? 'gl-tab--active' : ''}`} onClick={() => setTab('roles')}><KeyRound size={15} /> Roles</button>
             <button className={`gl-tab ${tab === 'modulos' ? 'gl-tab--active' : ''}`} onClick={() => setTab('modulos')}><Boxes size={15} /> Módulos</button>
-            <button className={`gl-tab ${tab === 'matriz' ? 'gl-tab--active' : ''}`} onClick={() => setTab('matriz')}><SlidersHorizontal size={15} /> Matriz</button>
+            <button className={`gl-tab ${tab === 'submodulos' ? 'gl-tab--active' : ''}`} onClick={() => setTab('submodulos')}><Layers3 size={15} /> Submódulos</button>
+            <button className={`gl-tab ${tab === 'permisos' ? 'gl-tab--active' : ''}`} onClick={() => setTab('permisos')}><ShieldCheck size={15} /> Permisos</button>
+            <button className={`gl-tab ${tab === 'matriz' ? 'gl-tab--active' : ''}`} onClick={() => setTab('matriz')}><Table2 size={15} /> Matriz</button>
           </div>
         </div>
       </div>
@@ -368,12 +383,33 @@ export default function RolesPermisos() {
               onCreateSubmoduloPermiso={submoduleId => openCreate('permiso', submoduleId)}
               onDelete={deleteEntity}
             />
+          ) : tab === 'submodulos' ? (
+            <SubmodulesTable
+              submodulos={allSubmodules}
+              modulos={modulos}
+              saving={saving}
+              onCreateSubmodulo={moduleId => openCreate('submodulo', moduleId)}
+              onEditSubmodulo={s => openEdit('submodulo', s)}
+              onCreateSubmoduloPermiso={submoduleId => openCreate('permiso', submoduleId)}
+              onDelete={deleteEntity}
+            />
+          ) : tab === 'permisos' ? (
+            <PermissionsTable
+              permissions={allPermissions}
+              modulos={modulos}
+              saving={saving}
+              onCreateModuloPermiso={moduleId => openCreate('permiso', -moduleId)}
+              onCreateSubmoduloPermiso={submoduleId => openCreate('permiso', submoduleId)}
+              onEditPermiso={p => openEdit('permiso', p)}
+              onDelete={deleteEntity}
+            />
           ) : (
             <MatrixEditor
               roles={roles}
               selectedRoleId={selectedRoleId}
               selectedPermIds={selectedPermIds}
               permissions={allPermissions}
+              matriz={matriz}
               saving={saving}
               onSelectRole={setSelectedRoleId}
               onTogglePermission={togglePermission}
@@ -530,6 +566,120 @@ function ModulesTable({
   )
 }
 
+function SubmodulesTable({
+  submodulos, modulos, saving, onCreateSubmodulo, onEditSubmodulo, onCreateSubmoduloPermiso, onDelete,
+}: {
+  submodulos: Array<Submodulo & { modulo_id: number; modulo_nombre: string; modulo_codigo: string }>
+  modulos: Modulo[]
+  saving: boolean
+  onCreateSubmodulo: (moduleId: number) => void
+  onEditSubmodulo: (submodulo: Submodulo) => void
+  onCreateSubmoduloPermiso: (submoduleId: number) => void
+  onDelete: (kind: EntityKind, id: number, hard?: boolean) => void
+}) {
+  return (
+    <>
+      <div className="gl-toolbar">
+        <label className="gl-field" style={{ minWidth: 260 }}>
+          <span className="gl-field-label">Crear submódulo en</span>
+          <select className="gl-select" onChange={e => e.target.value && onCreateSubmodulo(Number(e.target.value))} value="">
+            <option value="">Selecciona un módulo</option>
+            {modulos.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+          </select>
+        </label>
+      </div>
+      {submodulos.length === 0 ? (
+        <div className="gl-empty"><Layers3 size={32} /><p>No hay submódulos registrados.</p></div>
+      ) : (
+        <div className="gl-table-wrap">
+          <table className="gl-table">
+            <thead><tr><th>Submódulo</th><th>Módulo</th><th>Estado</th><th>Orden</th><th>Descripción</th><th>Acciones</th></tr></thead>
+            <tbody>
+              {submodulos.map(s => (
+                <tr key={s.id} className={!s.activo ? 'gl-tr--inactive' : ''}>
+                  <td><strong>{s.nombre}</strong><br /><span className="gl-td-gray">{s.codigo}</span></td>
+                  <td>{s.modulo_nombre}<br /><span className="gl-td-gray">{s.modulo_codigo}</span></td>
+                  <td>{activeBadge(s.activo)}</td>
+                  <td>{s.orden ?? 0}</td>
+                  <td className="gl-td-clamp" title={s.descripcion}>{s.descripcion || '—'}</td>
+                  <td>
+                    <div className="gl-row-actions">
+                      <button className="eg-btn eg-btn--ghost" onClick={() => onEditSubmodulo(s)}><Edit2 size={13} /> Editar</button>
+                      <button className="eg-btn eg-btn--ghost" onClick={() => onCreateSubmoduloPermiso(s.id)}><Plus size={13} /> Permiso</button>
+                      <button className="eg-btn eg-btn--danger" disabled={saving} onClick={() => onDelete('submodulo', s.id)}><Ban size={13} /> Desactivar</button>
+                      <button className="eg-btn eg-btn--danger" disabled={saving} onClick={() => onDelete('submodulo', s.id, true)}><Trash2 size={13} /> Borrar definitivo</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  )
+}
+
+function PermissionsTable({
+  permissions, modulos, saving, onCreateModuloPermiso, onCreateSubmoduloPermiso, onEditPermiso, onDelete,
+}: {
+  permissions: Array<Permiso & { scope: string }>
+  modulos: Modulo[]
+  saving: boolean
+  onCreateModuloPermiso: (moduleId: number) => void
+  onCreateSubmoduloPermiso: (submoduleId: number) => void
+  onEditPermiso: (permiso: Permiso) => void
+  onDelete: (kind: EntityKind, id: number, hard?: boolean) => void
+}) {
+  const submodulos = modulos.flatMap(m => (m.submodulos ?? []).map(s => ({ ...s, modulo_nombre: m.nombre })))
+  return (
+    <>
+      <div className="gl-toolbar">
+        <label className="gl-field" style={{ minWidth: 240 }}>
+          <span className="gl-field-label">Permiso de módulo</span>
+          <select className="gl-select" onChange={e => e.target.value && onCreateModuloPermiso(Number(e.target.value))} value="">
+            <option value="">Selecciona módulo</option>
+            {modulos.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+          </select>
+        </label>
+        <label className="gl-field" style={{ minWidth: 260 }}>
+          <span className="gl-field-label">Permiso de submódulo</span>
+          <select className="gl-select" onChange={e => e.target.value && onCreateSubmoduloPermiso(Number(e.target.value))} value="">
+            <option value="">Selecciona submódulo</option>
+            {submodulos.map(s => <option key={s.id} value={s.id}>{s.modulo_nombre} / {s.nombre}</option>)}
+          </select>
+        </label>
+      </div>
+      {permissions.length === 0 ? (
+        <div className="gl-empty"><ShieldCheck size={32} /><p>No hay permisos registrados.</p></div>
+      ) : (
+        <div className="gl-table-wrap">
+          <table className="gl-table">
+            <thead><tr><th>Permiso</th><th>Ámbito</th><th>Estado</th><th>Descripción</th><th>Acciones</th></tr></thead>
+            <tbody>
+              {permissions.map(p => (
+                <tr key={p.id} className={p.activo === false ? 'gl-tr--inactive' : ''}>
+                  <td><strong>{p.nombre}</strong><br /><span className="gl-td-gray">{p.codigo}</span></td>
+                  <td>{p.scope}</td>
+                  <td>{activeBadge(p.activo !== false)}</td>
+                  <td className="gl-td-clamp" title={p.descripcion}>{p.descripcion || '—'}</td>
+                  <td>
+                    <div className="gl-row-actions">
+                      <button className="eg-btn eg-btn--ghost" onClick={() => onEditPermiso(p)}><Edit2 size={13} /> Editar</button>
+                      <button className="eg-btn eg-btn--danger" disabled={saving} onClick={() => onDelete('permiso', p.id)}><Ban size={13} /> Desactivar</button>
+                      <button className="eg-btn eg-btn--danger" disabled={saving} onClick={() => onDelete('permiso', p.id, true)}><Trash2 size={13} /> Borrar definitivo</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  )
+}
+
 function PermissionChips({
   permissions, onEdit, onDelete,
 }: {
@@ -554,13 +704,14 @@ function PermissionChips({
 }
 
 function MatrixEditor({
-  roles, selectedRoleId, selectedPermIds, permissions, saving,
+  roles, selectedRoleId, selectedPermIds, permissions, matriz, saving,
   onSelectRole, onTogglePermission, onSave,
 }: {
   roles: Rol[]
   selectedRoleId: number | null
   selectedPermIds: Set<number>
   permissions: Array<Permiso & { scope: string }>
+  matriz: MatrizResponse | null
   saving: boolean
   onSelectRole: (id: number) => void
   onTogglePermission: (id: number) => void
@@ -586,6 +737,36 @@ function MatrixEditor({
         </button>
         <span className="ent-hint">{selectedPermIds.size} permiso{selectedPermIds.size !== 1 ? 's' : ''} seleccionado{selectedPermIds.size !== 1 ? 's' : ''}</span>
       </div>
+
+      {matriz && (
+        <div className="gl-table-wrap">
+          <table className="gl-table rmp-matrix-table">
+            <thead>
+              <tr>
+                <th>Módulo / permiso</th>
+                {matriz.roles.map(r => <th key={r.codigo}>{r.nombre}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {matriz.modulos.flatMap(m => m.permisos.map(p => (
+                <tr key={`${m.modulo}-${p.permiso_id}`}>
+                  <td>
+                    <strong>{m.nombre}</strong><br />
+                    <span className="gl-td-gray">{p.submodulo ? `${p.submodulo} / ` : ''}{p.permiso}</span>
+                  </td>
+                  {matriz.roles.map(r => (
+                    <td key={`${p.permiso_id}-${r.codigo}`}>
+                      <span className={`gl-badge ${p.roles[r.codigo] ? 'gl-badge--green' : 'gl-badge--gray'}`}>
+                        {p.roles[r.codigo] ? 'Sí' : 'No'}
+                      </span>
+                    </td>
+                  ))}
+                </tr>
+              )))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <div className="rmp-matrix">
         {Object.entries(grouped).map(([scope, list]) => (

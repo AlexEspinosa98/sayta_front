@@ -7,7 +7,7 @@ const ESCUDO = '/Assets/logos/unimagdalena-escudo.png'
 const SAYTA_LOGO = '/Assets/logos/sayta-logo.svg'
 
 export default function Layout() {
-  const { isAuthenticated, user, permissions, logout } = useAuth()
+  const { isAuthenticated, user, permissions, logout, refreshProfile } = useAuth()
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
   const location = useLocation()
@@ -16,6 +16,34 @@ export default function Layout() {
 
   // Cerrar el menú al cambiar de ruta
   useEffect(() => { setMenuOpen(false) }, [location.pathname])
+
+  // Revalidar rol/permisos en cada cambio de página para no mostrar ventanas
+  // con permisos viejos si un administrador cambió la matriz.
+  useEffect(() => {
+    if (!isAuthenticated) return
+    let cancelled = false
+    refreshProfile().catch(() => {
+      if (!cancelled) navigate('/login', { replace: true, state: { from: location.pathname } })
+    })
+    return () => { cancelled = true }
+  }, [isAuthenticated, location.pathname, navigate, refreshProfile])
+
+  useEffect(() => {
+    if (!isAuthenticated) return
+    const path = location.pathname
+    const allowed =
+      path === '/' ||
+      path === '/acerca' ||
+      path === '/login' ||
+      path === '/registro' ||
+      path === '/setup' ||
+      (path.startsWith('/traductor') && permissions.traduccion) ||
+      (path.startsWith('/glosario') && permissions.glosario.leer) ||
+      (path.startsWith('/entrenamiento') && permissions.modelosAsr.leer) ||
+      (path.startsWith('/etiquetado') && permissions.datasetAudio.leer) ||
+      (path.startsWith('/admin') && permissions.usuarios.gestionar)
+    if (!allowed) navigate('/', { replace: true })
+  }, [isAuthenticated, location.pathname, navigate, permissions])
 
   // Cerrar con Escape y bloquear scroll de fondo cuando está abierto
   useEffect(() => {

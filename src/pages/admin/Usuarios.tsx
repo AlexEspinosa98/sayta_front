@@ -45,7 +45,7 @@ function roleBadgeClass(rol: string) {
 }
 
 export default function Usuarios() {
-  const { user: currentUser } = useAuth()
+  const { user: currentUser, refreshProfile } = useAuth()
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
   const [roles, setRoles]       = useState<RolOption[]>([])
   const [loading, setLoading]   = useState(true)
@@ -102,7 +102,7 @@ export default function Usuarios() {
       }
       if (createForm.username.trim()) body.username = createForm.username.trim()
       await apiFetch('/auth/registro/', { method: 'POST', body: JSON.stringify(body) })
-      closeCreate(); load()
+      closeCreate(); await load(); await refreshProfile()
     } catch (e) {
       setCreateErr(apiErr(e, 'Error al registrar el usuario.'))
     } finally { setSaving(false) }
@@ -128,7 +128,7 @@ export default function Usuarios() {
       }
       if (editForm.password.trim()) body.password = editForm.password.trim()
       await apiFetch(`/auth/usuarios/${editing.id}/`, { method: 'PATCH', body: JSON.stringify(body) })
-      closeEdit(); load()
+      closeEdit(); await load(); await refreshProfile()
     } catch (e) {
       setEditErr(apiErr(e, 'Error al actualizar el usuario.'))
     } finally { setSaving(false) }
@@ -139,7 +139,7 @@ export default function Usuarios() {
     setSaving(true); setDeactivateErr('')
     try {
       await apiFetch(`/auth/usuarios/${confirmDeactivate.id}/${deleteHard ? '?hard=true' : ''}`, { method: 'DELETE' })
-      setConfirmDeactivate(null); load()
+      setConfirmDeactivate(null); await load(); await refreshProfile()
     } catch (e) {
       setDeactivateErr(apiErr(e, 'Error al desactivar el usuario.'))
     } finally { setSaving(false); setDeleteHard(false) }
@@ -148,7 +148,7 @@ export default function Usuarios() {
   const handleReactivate = async (u: Usuario) => {
     try {
       await apiFetch(`/auth/usuarios/${u.id}/`, { method: 'PATCH', body: JSON.stringify({ is_active: true }) })
-      load()
+      await load(); await refreshProfile()
     } catch (e) { setError(apiErr(e, 'Error al reactivar el usuario.')) }
   }
 
