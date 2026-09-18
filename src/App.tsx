@@ -8,6 +8,7 @@ import About from './pages/About'
 import Login from './pages/Login'
 import Setup from './pages/Setup'
 import Registro from './pages/Registro'
+import Perfil from './pages/Perfil'
 import Traductor from './pages/Traductor'
 import Etiquetado from './pages/Etiquetado'
 import Glosario from './pages/Glosario'
@@ -28,6 +29,9 @@ export default function App() {
           <Route path="/registro" element={<Registro />} />
 
           {/* Rutas protegidas — requieren sesión iniciada */}
+          <Route element={<RequireAuth />}>
+            <Route path="/perfil" element={<Perfil />} />
+          </Route>
           <Route element={<RequireAuth check={p => p.traduccion} />}>
             <Route path="/traductor" element={<Traductor />} />
           </Route>

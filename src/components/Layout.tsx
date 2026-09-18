@@ -14,6 +14,7 @@ function canAccessPath(path: string, permissions: Permissions) {
     path === '/login' ||
     path === '/registro' ||
     path === '/setup' ||
+    path === '/perfil' ||
     (path.startsWith('/traductor') && permissions.traduccion) ||
     (path.startsWith('/glosario') && permissions.glosario.leer) ||
     (path.startsWith('/entrenamiento') && permissions.modelosAsr.leer) ||
@@ -174,9 +175,9 @@ export default function Layout() {
 
           <div className="header-actions">
             {isAuthenticated && user && (
-              <span className="header-user-badge" title={user.rol_display}>
+              <NavLink to="/perfil" className="header-user-badge" title="Ver mi perfil" onClick={closeMenu}>
                 {user.username} · {user.rol_display}
-              </span>
+              </NavLink>
             )}
             {isAuthenticated ? (
               <button

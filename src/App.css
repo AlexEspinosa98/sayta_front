@@ -126,7 +126,9 @@
 .header-user-badge {
   font-size: .78rem; font-weight: 600; color: var(--gray-500);
   white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis;
+  text-decoration: none;
 }
+.header-user-badge:hover { color: var(--blue); }
 @media (max-width: 900px) { .header-user-badge { display: none; } }
 .header-menu-btn {
   display: none;               /* visible solo en móvil */
