@@ -97,10 +97,10 @@ export default function Usuarios() {
         first_name: createForm.first_name,
         last_name: createForm.last_name,
         rol: createForm.rol,
-        etnia: createForm.etnia || null,
-        comunidad: createForm.comunidad,
       }
       if (createForm.username.trim()) body.username = createForm.username.trim()
+      if (createForm.etnia) body.etnia = createForm.etnia
+      if (createForm.comunidad.trim()) body.comunidad = createForm.comunidad.trim()
       await apiFetch('/auth/registro/', { method: 'POST', body: JSON.stringify(body) })
       closeCreate(); await load(); await refreshProfile()
     } catch (e) {
@@ -121,12 +121,27 @@ export default function Usuarios() {
     if (!editing) return
     setSaving(true); setEditErr('')
     try {
-      const body: Record<string, unknown> = {
-        username: editForm.username, email: editForm.email, first_name: editForm.first_name,
-        last_name: editForm.last_name, rol: editForm.rol,
-        etnia: editForm.etnia || null, comunidad: editForm.comunidad,
-      }
+      const body: Record<string, unknown> = {}
+      const username = editForm.username.trim()
+      const email = editForm.email.trim()
+      const firstName = editForm.first_name.trim()
+      const lastName = editForm.last_name.trim()
+      const comunidad = editForm.comunidad.trim()
+
+      if (username !== editing.username) body.username = username
+      if (email !== editing.email) body.email = email
+      if (firstName !== (editing.first_name ?? '')) body.first_name = firstName
+      if (lastName !== (editing.last_name ?? '')) body.last_name = lastName
+      if (editForm.rol !== editing.rol) body.rol = editForm.rol
+      if (editForm.etnia !== (editing.etnia ?? '')) body.etnia = editForm.etnia
+      if (comunidad !== (editing.comunidad ?? '')) body.comunidad = comunidad
       if (editForm.password.trim()) body.password = editForm.password.trim()
+
+      if (Object.keys(body).length === 0) {
+        setEditErr('No hay cambios para guardar.')
+        return
+      }
+
       await apiFetch(`/auth/usuarios/${editing.id}/`, { method: 'PATCH', body: JSON.stringify(body) })
       closeEdit(); await load(); await refreshProfile()
     } catch (e) {
