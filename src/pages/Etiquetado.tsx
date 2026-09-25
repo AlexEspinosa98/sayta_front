@@ -80,7 +80,11 @@ function getGrabacionesPath(...parts: string[]) {
 }
 
 function getAudioUrl(community: string, session: string, audioName: string) {
-  return `${API_BASE}${getGrabacionesPath(community, session, 'audios', audioName)}`
+  // El backend expone el archivo de audio SIN slash final (session_audio_file_view
+  // en translator_api/urls.py), a diferencia de los demás endpoints de
+  // /grabaciones/. getGrabacionesPath siempre añade '/', así que aquí se
+  // construye aparte para no romper el nombre del archivo (p. ej. "*.wav/").
+  return `${API_BASE}${getGrabacionesPath(community, session, 'audios')}${encodeURIComponent(audioName)}`
 }
 
 function getAuthHeaders(): Record<string, string> {
