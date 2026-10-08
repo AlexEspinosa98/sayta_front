@@ -7,7 +7,7 @@ import {
   Wand2, Server, Power, StopCircle,
   type LucideIcon,
 } from 'lucide-react'
-import { apiFetch as sharedFetch, API_BASE } from '../api'
+import { apiFetch as sharedFetch, API_BASE, authHeaders } from '../api'
 import { useAudioRecorder } from '../hooks/useAudioRecorder'
 import { useAuth } from '../context/AuthContext'
 
@@ -1568,7 +1568,7 @@ function TranscribirTab() {
       const ep    = pipeline ? '/entrenamiento/transcribir-y-traducir/' : '/entrenamiento/transcribir/'
       const res   = await fetch(`${API_BASE}${ep}`, {
         method: 'POST',
-        headers: { Accept: 'application/json' },
+        headers: authHeaders(),
         body: fd,
       })
       const data: TranscripcionResult = await res.json()
@@ -1577,7 +1577,7 @@ function TranscribirTab() {
         const best = data.traduccion?.resultados?.findIndex(r => r.mejor_coincidencia) ?? 0
         setSelectedIdx(best >= 0 ? best : 0)
       } else {
-        setResult({ error: (data as { error?: string }).error ?? `Error ${res.status}` })
+        setResult({ error: (data as { error?: string; detail?: string }).error ?? (data as { detail?: string }).detail ?? `Error ${res.status}` })
       }
     } catch { setResult({ error: 'No se pudo conectar con el servidor.' }) }
     finally { setLoading(false) }
@@ -1736,7 +1736,7 @@ function SubirTab() {
     try {
       const res  = await fetch(`${API_BASE}/entrenamiento/dataset/subir/`, {
         method: 'POST',
-        headers: { Accept: 'application/json' },
+        headers: authHeaders(),
         body: fd,
       })
       const data = await res.json()

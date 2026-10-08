@@ -19,6 +19,12 @@ export function setForbiddenHandler(fn: ForbiddenHandler | null) {
   onForbidden = fn
 }
 
+/** Cabeceras con el token de sesión, para llamadas `fetch` directas con FormData (sin Content-Type). */
+export function authHeaders(): Record<string, string> {
+  const token = localStorage.getItem(TOKEN_KEY)
+  return { Accept: 'application/json', ...(token ? { Authorization: `Token ${token}` } : {}) }
+}
+
 export async function apiFetch(path: string, opts?: ApiFetchOptions) {
   const isForm = opts?.body instanceof FormData
   const token = opts?.auth === false ? null : localStorage.getItem(TOKEN_KEY)
