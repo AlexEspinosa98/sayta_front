@@ -4,7 +4,7 @@ import {
   Loader2, CheckCircle2, AlertCircle,
   Zap, BookOpen, Globe, Cpu, RotateCcw, FileJson,
 } from 'lucide-react'
-import { apiFetch, API_BASE } from '../api'
+import { apiFetch, API_BASE, authHeaders } from '../api'
 import { useAuth } from '../context/AuthContext'
 
 import {
@@ -673,7 +673,7 @@ function BulkModal({ lenguaId, onClose }: { lenguaId: string; onClose: () => voi
         fd.append('modo', mode)
         const res = await fetch(`${API_BASE}/terminos/terminos/carga-masiva/`, {
           method: 'POST',
-          headers: { Accept: 'application/json' },
+          headers: authHeaders(),
           body: fd,
         })
         data = await res.json() as Record<string, unknown>
