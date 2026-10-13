@@ -83,6 +83,10 @@ export default function Home() {
               Iniciar sesión
             </button>
           )}
+          <button type="button" className="home-about-link" onClick={() => navigate('/acerca')}>
+            <BookOpen size={16} aria-hidden="true" />
+            Acerca de SAYTA
+          </button>
         </header>
 
         {/* ── Características ──────────────────────────────── */}

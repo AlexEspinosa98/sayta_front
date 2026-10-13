@@ -3205,6 +3205,16 @@ a.contact-card .contact-card-icon { background: var(--blue); color: var(--white)
 }
 .home-cta-btn:active { transform: translateY(0); }
 
+/* Enlace público a «Acerca de» visible sin abrir el menú (móvil) */
+.home-about-link {
+  display: inline-flex; align-items: center; gap: 8px;
+  margin-top: 14px; padding: 8px 16px;
+  background: transparent; color: var(--sayta-primary, #1d4f6e);
+  border: 1.5px solid currentColor; border-radius: 999px;
+  font: inherit; font-weight: 600; font-size: .92rem; cursor: pointer;
+}
+.home-about-link:hover { background: rgba(29, 79, 110, .08); }
+
 .home-features {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
