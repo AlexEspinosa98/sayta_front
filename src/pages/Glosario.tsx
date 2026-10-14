@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   Plus, Edit2, Trash2, RefreshCw, Upload, Search, X,
   Loader2, CheckCircle2, AlertCircle,
-  Zap, BookOpen, Globe, Cpu, RotateCcw, FileJson,
+  Zap, BookOpen, Globe, Cpu, RotateCcw, FileJson, Download,
 } from 'lucide-react'
 import { apiFetch, API_BASE, authHeaders } from '../api'
 import { useAuth } from '../context/AuthContext'
@@ -291,7 +291,7 @@ function makeEmptyForm(lenguaId: string): TerminoFormState {
   return { termino: '', lengua: lenguaId, termino_es_texto: '', definicion: '', pos: '', sinonimos: '', ejemplos: '', activo: true }
 }
 
-interface TerminoPerms { crear: boolean; editar: boolean; eliminar: boolean; cargaMasiva: boolean }
+interface TerminoPerms { crear: boolean; editar: boolean; eliminar: boolean; cargaMasiva: boolean; descargar: boolean }
 
 function TerminosTab({ lenguas, perms }: { lenguas: Lengua[]; perms: TerminoPerms }) {
   const canEditRow = perms.editar || perms.eliminar
@@ -312,6 +312,30 @@ function TerminosTab({ lenguas, perms }: { lenguas: Lengua[]; perms: TerminoPerm
   const [formErr, setFormErr]     = useState('')
 
   const [showBulk, setShowBulk]           = useState(false)
+  const [downloading, setDownloading]   = useState(false)
+
+  // Descarga (JSON, mismo formato que la carga masiva) de los términos de la lengua elegida, o de todas.
+  const downloadTerminos = async () => {
+    setDownloading(true); setError('')
+    try {
+      const qs = new URLSearchParams({ lengua_id: filterLengua || 'todas' })
+      if (filterActivo) qs.set('activo', filterActivo)
+      const res = await fetch(`${API_BASE}/terminos/terminos/glosarios/?${qs}`, { headers: authHeaders() })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({})) as { error?: string; detail?: string }
+        throw new Error(d.error ?? d.detail ?? `Error ${res.status}`)
+      }
+      const blob = await res.blob()
+      const cd = res.headers.get('Content-Disposition') ?? ''
+      const name = /filename="([^"]+)"/.exec(cd)?.[1] ?? 'glosario.json'
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob); a.download = name
+      document.body.append(a); a.click(); a.remove()
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo descargar el glosario.')
+    } finally { setDownloading(false) }
+  }
   const [deleting, setDeleting]           = useState<Termino | null>(null)
   const [restoring, setRestoring]         = useState<Termino | null>(null)
   const [confirmSaving, setConfirmSaving] = useState(false)
@@ -424,6 +448,12 @@ function TerminosTab({ lenguas, perms }: { lenguas: Lengua[]; perms: TerminoPerm
           )}
           {perms.cargaMasiva && (
             <button className="eg-btn eg-btn--ghost" onClick={() => setShowBulk(true)} disabled={!filterLengua}><FileJson size={14} /> Carga masiva</button>
+          )}
+          {perms.descargar && (
+            <button className="eg-btn eg-btn--ghost" onClick={downloadTerminos} disabled={downloading}
+              title={filterLengua ? 'Descargar los términos de la lengua seleccionada (JSON)' : 'Descargar los términos de todas las lenguas (JSON)'}>
+              {downloading ? <Loader2 size={14} className="spin" /> : <Download size={14} />} Descargar términos
+            </button>
           )}
           <button className="eg-btn eg-btn--ghost" onClick={load} disabled={loading} title="Actualizar lista">
             <RefreshCw size={13} className={loading ? 'spin' : ''} /> Actualizar
@@ -941,6 +971,7 @@ export default function Glosario() {
     editar: permissions.glosario.editar,
     eliminar: permissions.glosario.eliminar,
     cargaMasiva: permissions.glosario.cargaMasiva,
+    descargar: permissions.usuarios.gestionar, // solo el administrador puede descargar los términos
   }
   const [activeTab, setActiveTab] = useState<Tab>('lenguas')
   const [lenguas, setLenguas]     = useState<Lengua[]>([])
