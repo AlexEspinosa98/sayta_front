@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   Mic, FolderOpen, BarChart2, RefreshCw, AlertCircle,
   Music, BookOpen, Tag, Check, Trash2, Edit2, X, ArrowLeft,
-  ChevronDown, Clock, Eye,
+  ChevronDown, Clock, Eye, History, Users,
 } from 'lucide-react'
 import { API_BASE, TOKEN_KEY, apiErr, apiFetch } from '../api'
 import { useAuth } from '../context/AuthContext'
@@ -38,6 +38,48 @@ interface AudioItem {
   duracion_formateada?: string
   etiquetado: boolean
   etiqueta?: string
+}
+
+interface Autoria {
+  creado_por: string | null
+  creado_en: string | null
+  creado_aproximado: boolean
+  editado_por: string | null
+  editado_en: string | null
+  ediciones: number
+  eliminado: boolean
+}
+
+interface HistorialEvento {
+  id: number
+  comunidad: string
+  jornada: string
+  audio: string
+  accion: 'crear' | 'editar' | 'eliminar'
+  etiqueta_anterior: string
+  etiqueta_nueva: string
+  usuario: string
+  rol: string
+  fecha: string
+  aproximado: boolean
+  origen: string
+}
+
+interface ActividadUsuario {
+  usuario_id: number | null
+  usuario: string
+  creadas: number
+  editadas: number
+  eliminadas: number
+  primera: string | null
+  ultima: string | null
+}
+
+const ACCION_TXT: Record<HistorialEvento['accion'], string> = { crear: 'Etiquetó', editar: 'Editó', eliminar: 'Eliminó' }
+
+function fechaCorta(iso: string | null | undefined) {
+  if (!iso) return ''
+  return new Date(iso).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Bogota' })
 }
 
 interface GlosarioTermino {
@@ -497,10 +539,148 @@ function GlossaryModal({ community, session, onClose }: {
 }
 
 /* ═══════════════════════════════════════════════════════
+   AUTORÍA DE ETIQUETAS (solo administrador)
+   Quién etiquetó, quién editó y qué cambió.
+═══════════════════════════════════════════════════════ */
+
+function EventoItem({ e, conAudio }: { e: HistorialEvento; conAudio?: boolean }) {
+  return (
+    <li className="eg-hist-item">
+      <div className="eg-hist-head">
+        <strong>{e.usuario}</strong>
+        <span className={`eg-hist-acc eg-hist-acc--${e.accion}`}>{ACCION_TXT[e.accion]}</span>
+        <span className="eg-hist-fecha"><Clock size={11} aria-hidden="true" /> {fechaCorta(e.fecha)}</span>
+        {e.aproximado && <span className="eg-hist-aprox" title="Autor deducido por la hora; puede no ser exacto">aproximado</span>}
+        {conAudio && <span className="eg-hist-audio">{e.jornada} · {e.audio}</span>}
+      </div>
+      {e.accion === 'editar' && (
+        <p className="eg-hist-cambio">
+          {e.etiqueta_anterior
+            ? <><del>{e.etiqueta_anterior}</del> → <ins>{e.etiqueta_nueva}</ins></>
+            : <>Nuevo texto: <ins>{e.etiqueta_nueva}</ins> <span className="eg-hist-nota">(el texto anterior no quedó registrado)</span></>}
+        </p>
+      )}
+      {e.accion === 'crear' && e.etiqueta_nueva && <p className="eg-hist-cambio"><ins>{e.etiqueta_nueva}</ins></p>}
+      {e.accion === 'eliminar' && e.etiqueta_anterior && <p className="eg-hist-cambio"><del>{e.etiqueta_anterior}</del></p>}
+    </li>
+  )
+}
+
+function HistorialModal({ community, session, audio, onClose }: {
+  community: string; session: string; audio: string; onClose: () => void
+}) {
+  const [eventos, setEventos] = useState<HistorialEvento[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    apiFetch(`${getGrabacionesPath(community, session, 'etiqueta', audio)}historial/`)
+      .then((d: { eventos: HistorialEvento[] }) => { if (!cancelled) setEventos(d.eventos) })
+      .catch(e => { if (!cancelled) setError(apiErr(e, 'No se pudo cargar el historial.')) })
+    return () => { cancelled = true }
+  }, [community, session, audio])
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div className="eg-modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label="Historial de la etiqueta">
+      <div className="eg-modal" onClick={e => e.stopPropagation()}>
+        <div className="eg-modal-header">
+          <div className="eg-modal-title-row">
+            <h2 className="eg-modal-title"><History size={16} aria-hidden="true" /> Historial de la etiqueta</h2>
+            <p className="eg-modal-sub">{audio}</p>
+          </div>
+          <button className="eg-modal-close" onClick={onClose} aria-label="Cerrar"><X size={16} aria-hidden="true" /></button>
+        </div>
+        <div className="eg-modal-body">
+          {error && <p className="eg-label-error" role="alert"><AlertCircle size={13} aria-hidden="true" /> {error}</p>}
+          {!eventos && !error && <div className="eg-loading"><RefreshCw size={16} className="spin" aria-hidden="true" /> Cargando…</div>}
+          {eventos && eventos.length === 0 && <p className="eg-modal-hint">Esta etiqueta es anterior al registro de cambios: no hay autor guardado.</p>}
+          {eventos && eventos.length > 0 && <ul className="eg-hist-list">{eventos.map(e => <EventoItem key={e.id} e={e} />)}</ul>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ActividadModal({ community, session, onClose }: {
+  community: string; session: string; onClose: () => void
+}) {
+  const [alcance, setAlcance] = useState<'jornada' | 'todo'>('jornada')
+  const [data, setData] = useState<{ usuarios: ActividadUsuario[]; recientes: HistorialEvento[]; total_eventos: number } | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setData(null); setError(null)
+    const qs = alcance === 'jornada' ? `?comunidad=${encodeURIComponent(community)}&jornada=${encodeURIComponent(session)}&limite=150` : '?limite=150'
+    apiFetch(`/grabaciones/etiquetado/actividad/${qs}`)
+      .then(d => { if (!cancelled) setData(d) })
+      .catch(e => { if (!cancelled) setError(apiErr(e, 'No se pudo cargar la actividad.')) })
+    return () => { cancelled = true }
+  }, [community, session, alcance])
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div className="eg-modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label="Actividad de etiquetado">
+      <div className="eg-modal eg-modal--wide" onClick={e => e.stopPropagation()}>
+        <div className="eg-modal-header">
+          <div className="eg-modal-title-row">
+            <h2 className="eg-modal-title"><Users size={16} aria-hidden="true" /> Actividad de etiquetado</h2>
+            <p className="eg-modal-sub">Quién etiquetó y quién cambió etiquetas</p>
+          </div>
+          <button className="eg-modal-close" onClick={onClose} aria-label="Cerrar"><X size={16} aria-hidden="true" /></button>
+        </div>
+        <div className="eg-modal-search">
+          <select className="eg-gate-input" value={alcance} onChange={e => setAlcance(e.target.value as 'jornada' | 'todo')} aria-label="Alcance">
+            <option value="jornada">Solo esta jornada ({session})</option>
+            <option value="todo">Todas las jornadas</option>
+          </select>
+        </div>
+        <div className="eg-modal-body">
+          {error && <p className="eg-label-error" role="alert"><AlertCircle size={13} aria-hidden="true" /> {error}</p>}
+          {!data && !error && <div className="eg-loading"><RefreshCw size={16} className="spin" aria-hidden="true" /> Cargando…</div>}
+          {data && (
+            <>
+              <h3 className="eg-hist-sub">Por persona</h3>
+              {data.usuarios.length === 0
+                ? <p className="eg-modal-hint">Todavía no hay cambios registrados en este alcance.</p>
+                : (
+                  <table className="eg-hist-table">
+                    <thead><tr><th>Persona</th><th>Etiquetó</th><th>Editó</th><th>Eliminó</th><th>Última actividad</th></tr></thead>
+                    <tbody>
+                      {data.usuarios.map(u => (
+                        <tr key={`${u.usuario_id}-${u.usuario}`}>
+                          <td>{u.usuario}</td><td>{u.creadas}</td><td>{u.editadas}</td><td>{u.eliminadas}</td><td>{fechaCorta(u.ultima)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              <h3 className="eg-hist-sub">Últimos cambios ({data.recientes.length} de {data.total_eventos})</h3>
+              <ul className="eg-hist-list">{data.recientes.map(e => <EventoItem key={e.id} e={e} conAudio />)}</ul>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════
    AUDIO ROW  (HU-16 · HU-18 · HU-19 · HU-20)
 ═══════════════════════════════════════════════════════ */
 
-function AudioRow({ audio, community, session, onLabelChange, isExpanded, onToggle, glossaryCategories, canEtiquetar }: {
+function AudioRow({ audio, community, session, onLabelChange, isExpanded, onToggle, glossaryCategories, canEtiquetar, autoria, onVerHistorial }: {
   audio: AudioItem
   community: string
   session: string
@@ -509,6 +689,8 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
   onToggle: () => void
   glossaryCategories: GlosarioCategoria[]
   canEtiquetar: boolean
+  autoria?: Autoria | null
+  onVerHistorial?: (audio: string) => void
 }) {
   const [mode, setMode]         = useState<LabelMode>('idle')
   const [inputVal, setInputVal] = useState(audio.etiqueta ?? '')
@@ -579,6 +761,12 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
         {audio.duracion_formateada && (
           <span className="eg-audio-duration"><Clock size={11} aria-hidden="true" /> {audio.duracion_formateada}</span>
         )}
+        {isLabeled && autoria && (autoria.creado_por || autoria.editado_por) && (
+          <span className="eg-audio-by" title="Quién etiquetó y quién editó (solo administrador)">
+            {autoria.creado_por && <>🏷 {autoria.creado_por}</>}
+            {autoria.editado_por && <> · ✎ {autoria.editado_por}</>}
+          </span>
+        )}
         <ChevronDown size={15} className={`eg-audio-chevron${isExpanded ? ' eg-audio-chevron--up' : ''}`} aria-hidden="true" />
       </button>
 
@@ -610,6 +798,20 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
                     </button>
                   </div>
                 )}
+              </div>
+            )}
+
+            {onVerHistorial && isLabeled && (
+              <div className="eg-autoria">
+                {autoria?.creado_por
+                  ? <p>Etiquetó: <strong>{autoria.creado_por}</strong> · {fechaCorta(autoria.creado_en)}{autoria.creado_aproximado ? ' (aproximado)' : ''}</p>
+                  : <p className="eg-autoria-nd">Autor original no registrado (etiqueta anterior al registro de cambios).</p>}
+                {autoria?.editado_por && (
+                  <p>Última edición: <strong>{autoria.editado_por}</strong> · {fechaCorta(autoria.editado_en)} · {autoria.ediciones} {autoria.ediciones === 1 ? 'cambio' : 'cambios'}</p>
+                )}
+                <button type="button" className="eg-btn eg-btn--ghost" onClick={() => onVerHistorial(audio.nombre)}>
+                  <History size={14} aria-hidden="true" /> Ver historial de cambios
+                </button>
               </div>
             )}
 
@@ -690,6 +892,20 @@ function SessionWorkspace({ community, session, onBack, canEtiquetar }: {
   const [error, setError]                           = useState<string | null>(null)
   const [showGlosario, setShowGlosario]             = useState(false)
   const [expandedAudio, setExpandedAudio]           = useState<string | null>(null)
+  const { permissions } = useAuth()
+  const isAdmin = permissions.usuarios.gestionar
+  const [autoria, setAutoria]                       = useState<Record<string, Autoria>>({})
+  const [historialAudio, setHistorialAudio]         = useState<string | null>(null)
+  const [showActividad, setShowActividad]           = useState(false)
+
+  // Solo el administrador ve quién etiquetó y quién editó.
+  const loadAutoria = useCallback(async () => {
+    if (!isAdmin) return
+    try {
+      const d = await apiFetch(getGrabacionesPath(community, session, 'etiquetado-info')) as { audios: Record<string, Autoria> }
+      setAutoria(d.audios ?? {})
+    } catch { /* sin permiso o sin historial: no se muestra */ }
+  }, [community, session, isAdmin])
 
   const fetchData = useCallback(async () => {
     setLoading(true); setError(null)
@@ -739,10 +955,12 @@ function SessionWorkspace({ community, session, onBack, canEtiquetar }: {
         etiquetado: labelMap.has(a.nombre),
         etiqueta:   labelMap.get(a.nombre),
       })))
+      loadAutoria()
     } catch { /* ignore */ }
-  }, [community, session])
+  }, [community, session, loadAutoria])
 
   useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { loadAutoria() }, [loadAutoria])
 
   const pct       = estado?.porcentaje_completado ?? 0
   const labeled   = estado?.total_etiquetados ?? 0
@@ -768,6 +986,11 @@ function SessionWorkspace({ community, session, onBack, canEtiquetar }: {
               <span aria-hidden="true"> › </span>
               <span className="eg-breadcrumb-current" aria-current="page">{session}</span>
             </nav>
+            {isAdmin && (
+              <button onClick={() => setShowActividad(true)} className="eg-btn eg-btn--ghost-light" aria-label="Ver actividad de etiquetado">
+                <Users size={15} aria-hidden="true" /> Actividad
+              </button>
+            )}
             <button onClick={() => setShowGlosario(true)} className="eg-btn eg-btn--ghost-light" aria-label="Ver glosario completo">
               <BookOpen size={15} aria-hidden="true" />
               Glosario
@@ -839,6 +1062,8 @@ function SessionWorkspace({ community, session, onBack, canEtiquetar }: {
                     onToggle={() => setExpandedAudio(prev => prev === a.nombre ? null : a.nombre)}
                     glossaryCategories={glossaryCategories}
                     canEtiquetar={canEtiquetar}
+                    autoria={isAdmin ? autoria[a.nombre] : undefined}
+                    onVerHistorial={isAdmin ? setHistorialAudio : undefined}
                   />
                 ))}
               </ul>
@@ -846,6 +1071,13 @@ function SessionWorkspace({ community, session, onBack, canEtiquetar }: {
           </section>
         )}
       </div>
+
+      {historialAudio && (
+        <HistorialModal community={community} session={session} audio={historialAudio} onClose={() => setHistorialAudio(null)} />
+      )}
+      {showActividad && (
+        <ActividadModal community={community} session={session} onClose={() => setShowActividad(false)} />
+      )}
 
       {showGlosario && (
         <GlossaryModal

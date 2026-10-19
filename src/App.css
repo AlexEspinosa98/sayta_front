@@ -3601,3 +3601,27 @@ a.contact-card .contact-card-icon { background: var(--blue); color: var(--white)
   .trx-chip { max-width: 42vw; }
   .trx-kb-hint { display: none; }
 }
+
+
+/* ── Autoría de etiquetas (solo administrador) ───────────────────────── */
+.eg-audio-by { font-size: .74rem; color: var(--text-muted, #5a6b73); margin-left: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%; }
+.eg-autoria { margin-top: 10px; padding: 10px 12px; border: 1px dashed var(--border, #cfd8dc); border-radius: 10px; font-size: .86rem; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.eg-autoria p { margin: 0; }
+.eg-autoria-nd { color: var(--text-muted, #5a6b73); font-style: italic; }
+.eg-modal--wide { max-width: 860px; width: 94vw; }
+.eg-hist-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.eg-hist-item { border: 1px solid var(--border, #d5dde0); border-radius: 10px; padding: 10px 12px; }
+.eg-hist-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: .86rem; }
+.eg-hist-acc { border-radius: 99px; padding: 1px 9px; font-size: .75rem; font-weight: 600; background: #e7f2ec; color: #0b6e4f; }
+.eg-hist-acc--editar { background: #fff1dc; color: #8a5200; }
+.eg-hist-acc--eliminar { background: #fdecea; color: #b42318; }
+.eg-hist-fecha { color: var(--text-muted, #5a6b73); display: inline-flex; gap: 4px; align-items: center; }
+.eg-hist-aprox { font-size: .72rem; border: 1px solid currentColor; border-radius: 99px; padding: 0 8px; color: #8a5200; }
+.eg-hist-audio { color: var(--text-muted, #5a6b73); font-size: .78rem; }
+.eg-hist-cambio { margin: 6px 0 0; font-size: .9rem; overflow-wrap: anywhere; }
+.eg-hist-cambio del { color: #b42318; }
+.eg-hist-cambio ins { color: #0b6e4f; text-decoration: none; font-weight: 600; }
+.eg-hist-nota { color: var(--text-muted, #5a6b73); font-size: .78rem; }
+.eg-hist-sub { font-size: .95rem; margin: 14px 0 8px; }
+.eg-hist-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+.eg-hist-table th, .eg-hist-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border, #e1e6e8); }
