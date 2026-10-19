@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import './App.css'
 import { AuthProvider } from './context/AuthContext'
 import RequireAuth from './components/RequireAuth'
@@ -47,6 +47,7 @@ export default function App() {
             <Route path="/etiquetado" element={<Etiquetado />} />
           </Route>
           <Route element={<RequireAuth check={p => p.usuarios.gestionar} />}>
+            <Route path="/admin" element={<Navigate to="/admin/usuarios" replace />} />
             <Route path="/admin/usuarios" element={<Usuarios />} />
             <Route path="/admin/roles" element={<RolesPermisos />} />
             <Route path="/admin/permisos" element={<RolesPermisos />} />
