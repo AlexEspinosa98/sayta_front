@@ -10,6 +10,7 @@ import {
 import { apiFetch as sharedFetch, API_BASE, authHeaders } from '../api'
 import { useAudioRecorder } from '../hooks/useAudioRecorder'
 import { useAuth } from '../context/AuthContext'
+import AlmacenamientoPanel from './AlmacenamientoPanel'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -68,6 +69,7 @@ interface Experimento {
   estado: string; estado_display: string; is_active: boolean
   num_muestras_train: number; num_muestras_eval: number
   metricas: Record<string, number>; created_at: string; completed_at: string | null
+  modelo_eliminado_en?: string | null; bytes_liberados?: number
 }
 
 interface ExperimentoDetalle extends Experimento {
@@ -1324,6 +1326,7 @@ function ExperimentosTab({ monitorId, onClearMonitor, canManage }: { monitorId: 
   const [expandId, setExpandId]   = useState<string | null>(null)
   const [detail, setDetail]       = useState<ExperimentoDetalle | null>(null)
   const [activErr, setActivErr]   = useState('')
+  const { permissions: permsExp } = useAuth()
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -1350,6 +1353,8 @@ function ExperimentosTab({ monitorId, onClearMonitor, canManage }: { monitorId: 
 
   return (
     <div className="ent-section">
+      {permsExp.usuarios.gestionar && <AlmacenamientoPanel />}
+
       {monitorId && (
         <div className="ent-monitor-box">
           <div className="ent-monitor-box-head">
@@ -1403,10 +1408,13 @@ function ExperimentosTab({ monitorId, onClearMonitor, canManage }: { monitorId: 
                     <td><EstadoBadge estado={exp.estado} isActive={exp.is_active} /></td>
                     <td>{new Date(exp.created_at).toLocaleDateString('es-CO')}</td>
                     <td>
-                      {canManage && exp.estado === 'completado' && !exp.is_active && (
+                      {canManage && exp.estado === 'completado' && !exp.is_active && !exp.modelo_eliminado_en && (
                         <button className="ent-btn ent-btn--sm ent-btn--primary" onClick={() => activar(exp.id)} type="button">
                           <Zap size={11} /> Activar
                         </button>
+                      )}
+                      {exp.modelo_eliminado_en && (
+                        <span className="ent-hint" title="El modelo se borró para liberar disco; las estadísticas se conservan">Modelo eliminado</span>
                       )}
                     </td>
                   </tr>
