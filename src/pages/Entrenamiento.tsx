@@ -70,6 +70,7 @@ interface Experimento {
   num_muestras_train: number; num_muestras_eval: number
   metricas: Record<string, number>; created_at: string; completed_at: string | null
   modelo_eliminado_en?: string | null; bytes_liberados?: number
+  reentrenado_de?: string | null; reentrenado_de_nombre?: string | null
 }
 
 interface ExperimentoDetalle extends Experimento {
@@ -886,7 +887,8 @@ function AugmentationDetailBlock({ aug }: { aug: AugConfig }) {
 function EntrenarTab({
   preselectedSesiones,
   onStarted,
-}: { preselectedSesiones: SesionKey[]; onStarted: (id: string) => void }) {
+  reentrenarDe,
+}: { preselectedSesiones: SesionKey[]; onStarted: (id: string) => void; reentrenarDe?: string | null }) {
   const [lenguasASR, setLenguasASR] = useState<LenguaASR[]>([])
   const [modelos, setModelos]       = useState<ModeloLocal[]>([])
   const [sesiones, setSesiones]     = useState<Sesion[]>([])
@@ -896,6 +898,10 @@ function EntrenarTab({
   const [lenguaId, setLenguaId]     = useState<number | ''>('')
   const [modeloId, setModeloId]     = useState<number | ''>('')
   const [dataMode, setDataMode]     = useState<DataMode>('sesiones')
+
+  // Punto de partida: vacío = modelo base; con id = continuar un modelo ya entrenado (reentrenar)
+  const [entrenados, setEntrenados] = useState<Experimento[]>([])
+  const [baseExpId, setBaseExpId]   = useState('')
 
   // Comunidades mode
   const [selComunidades, setSelComunidades] = useState<string[]>([])
@@ -917,12 +923,38 @@ function EntrenarTab({
       apiFetch('/terminos/lenguas/?page_size=50'),
       apiFetch('/entrenamiento/modelos/'),
       apiFetch('/entrenamiento/dataset/sesiones/'),
-    ]).then(([lang, mod, ses]) => {
+      apiFetch('/entrenamiento/experimentos/').catch(() => ({ experimentos: [] })),
+    ]).then(([lang, mod, ses, exps]) => {
       setLenguasASR(lang.results ?? lang)
       setModelos(mod.modelos ?? [])
       setSesiones(ses.sesiones ?? [])
+      setEntrenados((exps.experimentos ?? []) as Experimento[])
     }).catch(() => {}).finally(() => setLoading(false))
   }, [])
+
+  // Modelos que se pueden reentrenar: completados/activos, con modelo en disco y de la lengua elegida
+  const lenguaSel = lenguasASR.find(l => l.id === lenguaId)
+  const reentrenables = entrenados.filter(e =>
+    (e.estado === 'completado' || e.estado === 'activo') && !e.modelo_eliminado_en &&
+    !!lenguaSel && e.lengua_codigo === lenguaSel.codigo && /whisper/i.test(e.modelo_nombre ?? ''))
+
+  const elegirBase = (id: string) => {
+    setBaseExpId(id)
+    const e = entrenados.find(x => x.id === id)
+    if (e) setModeloId(modelos.find(m => m.nombre_hf === e.modelo_nombre)?.id ?? '')
+  }
+
+  // Llegada desde el botón «Reentrenar» de un experimento
+  useEffect(() => {
+    if (!reentrenarDe || entrenados.length === 0 || lenguasASR.length === 0) return
+    const e = entrenados.find(x => x.id === reentrenarDe)
+    if (!e) return
+    const l = lenguasASR.find(x => x.codigo === e.lengua_codigo)
+    if (l) setLenguaId(l.id)
+    setBaseExpId(e.id)
+    setModeloId(modelos.find(m => m.nombre_hf === e.modelo_nombre)?.id ?? '')
+    setNombre(n => n || `${e.nombre}-reentrenado`)
+  }, [reentrenarDe, entrenados, lenguasASR, modelos])
 
   useEffect(() => {
     if (preselectedSesiones.length > 0) {
@@ -984,7 +1016,10 @@ function EntrenarTab({
     if (!canSubmit) return
     setSubmitting(true); setSubmitErr('')
     try {
-      const base = { nombre: nombre.trim(), lengua_id: lenguaId, modelo_audio_id: modeloId, config: cfg }
+      const base = {
+        nombre: nombre.trim(), lengua_id: lenguaId, modelo_audio_id: modeloId, config: cfg,
+        ...(baseExpId ? { experimento_base_id: baseExpId } : {}),
+      }
       const dataPayload =
         dataMode === 'todos' ? { todos: true }
         : dataMode === 'comunidades' ? { comunidades: selComunidades }
@@ -1040,6 +1075,27 @@ function EntrenarTab({
               <p className="ent-hint ent-hint-err">Sin modelos descargados. Ve a <strong>Modelos</strong>.</p>
             )}
           </div>
+        </div>
+
+        {/* Punto de partida: desde el modelo base o reentrenar un modelo ya entrenado */}
+        <div className="ent-field">
+          <label className="ent-label">Punto de partida</label>
+          <select className="gl-input" value={baseExpId} onChange={e => elegirBase(e.target.value)} disabled={!lenguaId}>
+            <option value="">Modelo base (empezar desde cero con Whisper)</option>
+            {reentrenables.map(e => (
+              <option key={e.id} value={e.id}>
+                Reentrenar «{e.nombre}»{e.is_active ? ' (activo)' : ''}
+                {e.metricas?.eval_wer != null ? ` · WER ${(e.metricas.eval_wer * 100).toFixed(1)} %` : ''} · {new Date(e.created_at).toLocaleDateString('es-CO')}
+              </option>
+            ))}
+          </select>
+          <p className="ent-hint">
+            {baseExpId
+              ? 'Se continúa el entrenamiento de ese modelo con los datos que elijas abajo (útil cuando ya hay más audios etiquetados). El modelo anterior no se modifica: se crea un experimento nuevo.'
+              : lenguaId && reentrenables.length === 0
+                ? 'Esta lengua aún no tiene modelos entrenados con el modelo en disco para reentrenar.'
+                : 'Elige un modelo ya entrenado para continuar su entrenamiento con más datos.'}
+          </p>
         </div>
 
         {/* Modo de selección de datos */}
@@ -1319,7 +1375,7 @@ function Monitor({ id, onActivated, canActivate = true }: { id: string; onActiva
 // ExperimentosTab — HU-22 + HU-23 + HU-24
 // ══════════════════════════════════════════════════════════════════════════════
 
-function ExperimentosTab({ monitorId, onClearMonitor, canManage }: { monitorId: string | null; onClearMonitor: () => void; canManage: boolean }) {
+function ExperimentosTab({ monitorId, onClearMonitor, canManage, onReentrenar }: { monitorId: string | null; onClearMonitor: () => void; canManage: boolean; onReentrenar?: (id: string) => void }) {
   const [exps, setExps]           = useState<Experimento[]>([])
   const [loading, setLoading]     = useState(true)
   const [filterEstado, setFilter] = useState('')
@@ -1400,7 +1456,10 @@ function ExperimentosTab({ monitorId, onClearMonitor, canManage }: { monitorId: 
                         {expandId === exp.id ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                       </button>
                     </td>
-                    <td className="ent-td-bold">{exp.nombre}</td>
+                    <td className="ent-td-bold">
+                      {exp.nombre}
+                      {exp.reentrenado_de_nombre && <div className="ent-hint">↻ reentrenado de «{exp.reentrenado_de_nombre}»</div>}
+                    </td>
                     <td>{exp.lengua_nombre}</td>
                     <td><span className="ent-tipo-pill">{exp.modelo_nombre?.split('/')[1] ?? exp.modelo_nombre}</span></td>
                     <td>{exp.metricas?.eval_wer != null ? <WerBadge wer={exp.metricas.eval_wer} /> : '—'}</td>
@@ -1415,6 +1474,12 @@ function ExperimentosTab({ monitorId, onClearMonitor, canManage }: { monitorId: 
                       )}
                       {exp.modelo_eliminado_en && (
                         <span className="ent-hint" title="El modelo se borró para liberar disco; las estadísticas se conservan">Modelo eliminado</span>
+                      )}
+                      {onReentrenar && (exp.estado === 'completado' || exp.estado === 'activo') && !exp.modelo_eliminado_en && /whisper/i.test(exp.modelo_nombre ?? '') && (
+                        <button className="ent-btn ent-btn--sm ent-btn--ghost" style={{ marginLeft: 6 }} type="button"
+                          onClick={() => onReentrenar(exp.id)} title="Continuar el entrenamiento de este modelo con más datos">
+                          <RefreshCw size={11} /> Reentrenar
+                        </button>
                       )}
                     </td>
                   </tr>
@@ -2202,6 +2267,7 @@ export default function Entrenamiento() {
   const [tab, setTab]               = useState<Tab>('datos')
   const [selSesiones, setSelSesiones] = useState<SesionKey[]>([])
   const [monitorId, setMonitorId]   = useState<string | null>(null)
+  const [reentrenarDe, setReentrenarDe] = useState<string | null>(null)
 
   const activeTab = visibleTabs.some(t => t.id === tab) ? tab : 'datos'
 
@@ -2233,11 +2299,13 @@ export default function Entrenamiento() {
         {activeTab === 'entrenar' && canManage && (
           <EntrenarTab
             preselectedSesiones={selSesiones}
-            onStarted={id => { setMonitorId(id); setTab('experimentos') }}
+            reentrenarDe={reentrenarDe}
+            onStarted={id => { setMonitorId(id); setReentrenarDe(null); setTab('experimentos') }}
           />
         )}
         {activeTab === 'experimentos' && (
-          <ExperimentosTab monitorId={monitorId} onClearMonitor={() => setMonitorId(null)} canManage={canManage} />
+          <ExperimentosTab monitorId={monitorId} onClearMonitor={() => setMonitorId(null)} canManage={canManage}
+            onReentrenar={canManage ? (id => { setReentrenarDe(id); setTab('entrenar') }) : undefined} />
         )}
         {activeTab === 'procesos' && <ProcesosTab />}
         {activeTab === 'transcribir' && <TranscribirTab />}
