@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AlertCircle, Download, FileSignature, Loader2, RefreshCw, Search, X, Eye } from 'lucide-react'
+import { AlertCircle, Download, FileSignature, Loader2, RefreshCw, Search, X, Eye, Trash2 } from 'lucide-react'
 import { TOKEN_KEY } from '../../api'
 
 /**
@@ -35,8 +35,8 @@ function authHeaders(): Record<string, string> {
   return t ? { Authorization: `Token ${t}`, Accept: 'application/json' } : {}
 }
 
-async function pedir(ruta: string): Promise<Response> {
-  const r = await fetch(`${BASE}/${ruta}`, { headers: authHeaders() })
+async function pedir(ruta: string, init: RequestInit = {}): Promise<Response> {
+  const r = await fetch(`${BASE}/${ruta}`, { ...init, headers: { ...authHeaders(), ...(init.headers as Record<string, string> | undefined) } })
   if (!r.ok) {
     const d = await r.json().catch(() => ({})) as { detail?: string }
     throw new Error(typeof d.detail === 'string' ? d.detail : `Error ${r.status}`)
@@ -103,7 +103,9 @@ function DocumentoFirmado({ d, firmaUrl }: { d: Documento; firmaUrl: string | nu
   )
 }
 
-function DetalleModal({ id, onClose }: { id: number; onClose: () => void }) {
+const AVISO_BORRAR = 'Se eliminará DEFINITIVAMENTE el consentimiento con su foto, firma y datos personales. Solo quedará constancia del código y de quién lo borró. Esta acción no se puede deshacer.'
+
+function DetalleModal({ id, onClose, onBorrado }: { id: number; onClose: () => void; onBorrado: () => void }) {
   const [d, setD] = useState<Detalle | null>(null)
   const [doc, setDoc] = useState<Documento | null>(null)
   const [verDoc, setVerDoc] = useState(false)
@@ -121,6 +123,12 @@ function DetalleModal({ id, onClose }: { id: number; onClose: () => void }) {
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
+
+  const borrar = async () => {
+    if (!d || !window.confirm(`¿Eliminar el consentimiento ${d.codigo} de ${d.participante_nombre}?\n\n${AVISO_BORRAR}`)) return
+    setError('')
+    try { await pedir(`consentimientos/${id}`, { method: 'DELETE' }); onBorrado() } catch (e) { setError((e as Error).message) }
+  }
 
   const mostrarDocumento = async () => {
     setError('')
@@ -184,6 +192,7 @@ function DetalleModal({ id, onClose }: { id: number; onClose: () => void }) {
           {d?.estado === 'firmado' && !verDoc && <button className="eg-btn eg-btn--ghost" onClick={mostrarDocumento}><Eye size={14} /> Ver documento</button>}
           {verDoc && <button className="eg-btn eg-btn--ghost" onClick={() => setVerDoc(false)}>Volver a los datos</button>}
           {d?.estado === 'firmado' && <button className="eg-btn eg-btn--primary" onClick={bajarPdf} disabled={descargando}>{descargando ? <Loader2 size={14} className="spin" /> : <Download size={14} />} Descargar PDF</button>}
+          {d && <button className="eg-btn eg-btn--ghost" style={{ color: '#c0392b' }} onClick={borrar}><Trash2 size={14} /> Eliminar</button>}
           <button className="eg-btn eg-btn--ghost" onClick={onClose}>Cerrar</button>
         </div>
       </div>
@@ -200,6 +209,11 @@ export default function Consentimientos() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [abierto, setAbierto] = useState<number | null>(null)
+
+  const borrarFila = async (f: Fila) => {
+    if (!window.confirm(`¿Eliminar el consentimiento ${f.codigo} de ${f.participante_nombre}?\n\n${AVISO_BORRAR}`)) return
+    try { await pedir(`consentimientos/${f.id}`, { method: 'DELETE' }); await cargar() } catch (e) { setError((e as Error).message) }
+  }
 
   const cargar = useCallback(async () => {
     setLoading(true); setError('')
@@ -261,7 +275,7 @@ export default function Consentimientos() {
                     <td className="gl-td-gray">{f.plantilla_nombre}</td>
                     <td><Estado f={f} /></td>
                     <td className="gl-td-gray">{fechaCorta(f.firmado_en ?? f.creado_en)}</td>
-                    <td><button className="eg-btn eg-btn--ghost" onClick={e => { e.stopPropagation(); setAbierto(f.id) }}><Eye size={13} /> Ver</button></td>
+                    <td><button className="eg-btn eg-btn--ghost" onClick={e => { e.stopPropagation(); setAbierto(f.id) }}><Eye size={13} /> Ver</button> <button className="eg-btn eg-btn--ghost" style={{ color: '#c0392b' }} title="Eliminar" onClick={e => { e.stopPropagation(); borrarFila(f) }}><Trash2 size={13} /></button></td>
                   </tr>
                 ))}
               </tbody>
@@ -269,7 +283,7 @@ export default function Consentimientos() {
           </div>
         )}
       </div>
-      {abierto !== null && <DetalleModal id={abierto} onClose={() => setAbierto(null)} />}
+      {abierto !== null && <DetalleModal id={abierto} onClose={() => setAbierto(null)} onBorrado={() => { setAbierto(null); cargar() }} />}
     </div>
   )
 }
