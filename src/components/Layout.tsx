@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { BookOpen, Home, Library, Activity, Tag, LogOut, LogIn, Languages, Menu, X, Users, ShieldCheck } from 'lucide-react'
+import { BookOpen, Home, Library, Activity, Tag, LogOut, LogIn, Languages, Menu, X, Users, ShieldCheck, FileSignature } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { resolvePermissions, type Permissions } from '../permissions'
 
@@ -161,6 +161,11 @@ export default function Layout() {
                   <li>
                     <NavLink to="/admin/roles" className={navLinkClass} onClick={closeMenu}>
                       <ShieldCheck size={16} aria-hidden="true" /><span>Permisos</span>
+                    </NavLink>
+                  </li>
+                  <li>
+                    <NavLink to="/admin/consentimientos" className={navLinkClass} onClick={closeMenu}>
+                      <FileSignature size={16} aria-hidden="true" /><span>Consentimientos</span>
                     </NavLink>
                   </li>
                 </>

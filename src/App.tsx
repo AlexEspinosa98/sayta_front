@@ -15,6 +15,7 @@ import Glosario from './pages/Glosario'
 import Entrenamiento from './pages/Entrenamiento'
 import Usuarios from './pages/admin/Usuarios'
 import RolesPermisos from './pages/admin/RolesPermisos'
+import Consentimientos from './pages/admin/Consentimientos'
 
 export default function App() {
   return (
@@ -49,6 +50,7 @@ export default function App() {
           <Route element={<RequireAuth check={p => p.usuarios.gestionar} />}>
             <Route path="/admin" element={<Navigate to="/admin/usuarios" replace />} />
             <Route path="/admin/usuarios" element={<Usuarios />} />
+            <Route path="/admin/consentimientos" element={<Consentimientos />} />
             <Route path="/admin/roles" element={<RolesPermisos />} />
             <Route path="/admin/permisos" element={<RolesPermisos />} />
             <Route path="/admin/roles-permisos" element={<RolesPermisos />} />
