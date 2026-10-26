@@ -121,7 +121,15 @@
   overflow: hidden;
   justify-content: center;
 }
-.header-nav .nav { max-width: 100%; }
+.header-nav .nav { max-width: 100%; scroll-behavior: smooth; }
+.header-nav { position: relative; align-items: center; gap: 2px; }
+.nav-arrow {
+  flex-shrink: 0; width: 32px; height: 44px; display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--gray-200); border-radius: 10px; background: var(--white); color: var(--navy); cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.nav-arrow:hover { background: var(--teal-light); border-color: var(--teal); color: var(--teal-dark); }
+@media (max-width: 900px) { .nav-arrow { display: none; } }
 .header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .header-user-badge {
   font-size: .78rem; font-weight: 600; color: var(--gray-500);
@@ -146,7 +154,7 @@
 }
 
 /* ── Header en móvil: nav como drawer desplegable ── */
-@media (max-width: 1240px) {
+@media (max-width: 900px) {
   .header-menu-btn { display: inline-flex; }
 
   /* Botón bloquear: solo el candado en móvil para optimizar espacio */

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { BookOpen, Home, Library, Activity, Tag, LogOut, LogIn, Languages, Menu, X, Users, ShieldCheck, FileSignature } from 'lucide-react'
+import { BookOpen, Home, Library, Activity, Tag, LogOut, LogIn, Languages, Menu, X, Users, ShieldCheck, FileSignature, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { resolvePermissions, type Permissions } from '../permissions'
 
@@ -27,6 +27,8 @@ export default function Layout() {
   const { isAuthenticated, user, permissions, logout, refreshProfile } = useAuth()
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
+  const navRef = useRef<HTMLUListElement>(null)
+  const [flechas, setFlechas] = useState({ izq: false, der: false })
   const location = useLocation()
   const routeValidationPending = useRef(false)
 
@@ -74,6 +76,25 @@ export default function Layout() {
     return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = '' }
   }, [menuOpen])
 
+  // Carrusel del menú: flechas visibles solo cuando hay ítems ocultos a ese lado
+  useEffect(() => {
+    const el = navRef.current
+    if (!el) return
+    const medir = () => setFlechas({ izq: el.scrollLeft > 4, der: el.scrollLeft + el.clientWidth < el.scrollWidth - 4 })
+    medir()
+    el.addEventListener('scroll', medir, { passive: true })
+    window.addEventListener('resize', medir)
+    const ro = new ResizeObserver(medir)
+    ro.observe(el)
+    el.querySelector('.nav-link-active')?.scrollIntoView({ block: 'nearest', inline: 'center' })
+    return () => { el.removeEventListener('scroll', medir); window.removeEventListener('resize', medir); ro.disconnect() }
+  }, [location.pathname, isAuthenticated, permissions])
+
+  const desplazarNav = (dir: -1 | 1) => {
+    const el = navRef.current
+    if (el) el.scrollBy({ left: dir * Math.max(160, el.clientWidth * 0.6), behavior: 'smooth' })
+  }
+
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     `nav-link${isActive ? ' nav-link-active' : ''}`
 
@@ -117,7 +138,8 @@ export default function Layout() {
             className={`header-nav${menuOpen ? ' is-open' : ''}`}
             aria-label="Navegación principal"
           >
-            <ul className="nav" role="list">
+            {flechas.izq && <button type="button" className="nav-arrow nav-arrow--left" aria-label="Ver opciones anteriores" onClick={() => desplazarNav(-1)}><ChevronLeft size={18} /></button>}
+            <ul className="nav" role="list" ref={navRef}>
               <li>
                 <NavLink to="/" end className={navLinkClass} onClick={closeMenu}>
                   <Home size={16} aria-hidden="true" /><span>Inicio</span>
@@ -176,6 +198,7 @@ export default function Layout() {
                 </NavLink>
               </li>
             </ul>
+            {flechas.der && <button type="button" className="nav-arrow nav-arrow--right" aria-label="Ver más opciones" onClick={() => desplazarNav(1)}><ChevronRight size={18} /></button>}
           </nav>
 
           <div className="header-actions">
