@@ -146,7 +146,7 @@
 }
 
 /* ── Header en móvil: nav como drawer desplegable ── */
-@media (max-width: 900px) {
+@media (max-width: 1240px) {
   .header-menu-btn { display: inline-flex; }
 
   /* Botón bloquear: solo el candado en móvil para optimizar espacio */
