@@ -932,16 +932,26 @@ function EntrenarTab({
     }).catch(() => {}).finally(() => setLoading(false))
   }, [])
 
-  // Modelos que se pueden reentrenar: completados/activos, con modelo en disco y de la lengua elegida
+  // Modelos que se pueden usar como base: completados/activos, con modelo en disco, de cualquier lengua
+  // (la lengua de la base puede ser distinta a la que se entrena: transferencia entre lenguas).
+  // Primero los de la misma lengua elegida.
   const lenguaSel = lenguasASR.find(l => l.id === lenguaId)
-  const reentrenables = entrenados.filter(e =>
-    (e.estado === 'completado' || e.estado === 'activo') && !e.modelo_eliminado_en &&
-    !!lenguaSel && e.lengua_codigo === lenguaSel.codigo && /whisper/i.test(e.modelo_nombre ?? ''))
+  const entrenadosTodos = entrenados.filter(e => e.estado === 'completado' || e.estado === 'activo')
+    .sort((a, b) => Number(b.lengua_codigo === lenguaSel?.codigo) - Number(a.lengua_codigo === lenguaSel?.codigo))
+  const baseSel = entrenados.find(x => x.id === baseExpId)
+  const baseOtraLengua = !!baseSel && !!lenguaSel && baseSel.lengua_codigo !== lenguaSel.codigo
 
-  const elegirBase = (id: string) => {
-    setBaseExpId(id)
-    const e = entrenados.find(x => x.id === id)
-    if (e) setModeloId(modelos.find(m => m.nombre_hf === e.modelo_nombre)?.id ?? '')
+  // El selector mezcla modelos base ("m:<id>") y modelos ya entrenados ("e:<uuid>")
+  const elegirModelo = (v: string) => {
+    if (v.startsWith('e:')) {
+      const id = v.slice(2)
+      setBaseExpId(id)
+      const e = entrenados.find(x => x.id === id)
+      if (e) setModeloId(modelos.find(m => m.nombre_hf === e.modelo_nombre)?.id ?? '')
+    } else {
+      setBaseExpId('')
+      setModeloId(v.startsWith('m:') ? Number(v.slice(2)) : '')
+    }
   }
 
   // Llegada desde el botón «Reentrenar» de un experimento
@@ -1066,10 +1076,26 @@ function EntrenarTab({
           </div>
           <div className="ent-field">
             <label className="ent-label">Modelo base <span className="ent-req">*</span></label>
-            <select className="gl-input" value={modeloId}
-              onChange={e => setModeloId(Number(e.target.value) as number | '')}>
+            <select className="gl-input" value={baseExpId ? `e:${baseExpId}` : modeloId ? `m:${modeloId}` : ''}
+              onChange={e => elegirModelo(e.target.value)}>
               <option value="">— Selecciona un modelo —</option>
-              {modelos.map(m => <option key={m.id} value={m.id}>{m.nombre_hf}</option>)}
+              <optgroup label="Modelos base (HuggingFace)">
+                {modelos.map(m => <option key={m.id} value={`m:${m.id}`}>{m.nombre_hf}</option>)}
+              </optgroup>
+              {entrenadosTodos.length > 0 && (
+                <optgroup label="Modelos ya entrenados (cualquier lengua)">
+                  {entrenadosTodos.map(e => {
+                    const motivo = e.modelo_eliminado_en ? 'eliminado del disco' : !/whisper/i.test(e.modelo_nombre ?? '') ? 'solo Whisper se puede reentrenar' : ''
+                    return (
+                      <option key={e.id} value={`e:${e.id}`} disabled={!!motivo}>
+                        {e.nombre} · {e.lengua_nombre}{e.is_active ? ' (activo)' : ''}
+                        {e.metricas?.eval_wer != null ? ` · WER ${(e.metricas.eval_wer * 100).toFixed(1)} %` : ''}
+                        {motivo ? ` — ${motivo}` : ''}
+                      </option>
+                    )
+                  })}
+                </optgroup>
+              )}
             </select>
             {modelos.length === 0 && (
               <p className="ent-hint ent-hint-err">Sin modelos descargados. Ve a <strong>Modelos</strong>.</p>
@@ -1077,26 +1103,13 @@ function EntrenarTab({
           </div>
         </div>
 
-        {/* Punto de partida: desde el modelo base o reentrenar un modelo ya entrenado */}
-        <div className="ent-field">
-          <label className="ent-label">Punto de partida</label>
-          <select className="gl-input" value={baseExpId} onChange={e => elegirBase(e.target.value)} disabled={!lenguaId}>
-            <option value="">Modelo base (empezar desde cero con Whisper)</option>
-            {reentrenables.map(e => (
-              <option key={e.id} value={e.id}>
-                Reentrenar «{e.nombre}»{e.is_active ? ' (activo)' : ''}
-                {e.metricas?.eval_wer != null ? ` · WER ${(e.metricas.eval_wer * 100).toFixed(1)} %` : ''} · {new Date(e.created_at).toLocaleDateString('es-CO')}
-              </option>
-            ))}
-          </select>
-          <p className="ent-hint">
-            {baseExpId
-              ? 'Se continúa el entrenamiento de ese modelo con los datos que elijas abajo (útil cuando ya hay más audios etiquetados). El modelo anterior no se modifica: se crea un experimento nuevo.'
-              : lenguaId && reentrenables.length === 0
-                ? 'Esta lengua aún no tiene modelos entrenados con el modelo en disco para reentrenar.'
-                : 'Elige un modelo ya entrenado para continuar su entrenamiento con más datos.'}
-          </p>
-        </div>
+        <p className="ent-hint" style={{ marginTop: -4 }}>
+          {baseOtraLengua
+            ? `Transferencia entre lenguas: se parte de los pesos del modelo de ${baseSel!.lengua_nombre} y se afina con los datos de ${lenguaSel!.nombre}. El modelo anterior no se modifica: se crea un experimento nuevo.`
+            : baseExpId
+              ? 'Se continúa el entrenamiento de ese modelo con los datos que elijas abajo. El modelo anterior no se modifica: se crea un experimento nuevo.'
+              : 'Elige un modelo base de HuggingFace o un modelo ya entrenado (de cualquier lengua) como punto de partida.'}
+        </p>
 
         {/* Modo de selección de datos */}
         <div className="ent-field">
