@@ -4,13 +4,17 @@ import {
   Loader2, CheckCircle2, AlertTriangle, XCircle,
   ChevronDown, ChevronRight, Download, HardDrive,
   Star, RefreshCw, BarChart2, Languages, Activity, Zap, FolderPlus,
-  Wand2, Server, Power, StopCircle,
+  Wand2, Server, Power, StopCircle, BookOpen, ExternalLink,
   type LucideIcon,
 } from 'lucide-react'
 import { apiFetch as sharedFetch, API_BASE, authHeaders } from '../api'
 import { useAudioRecorder } from '../hooks/useAudioRecorder'
 import { useAuth } from '../context/AuthContext'
 import AlmacenamientoPanel from './AlmacenamientoPanel'
+import EntrenamientoGuia from './EntrenamientoGuia'
+import {
+  InfoTip, Etiqueta, Sparkline, abrirMlflow, nombreValor, esPorcentaje, fmtDuracion, fmtNumero, METRICAS, CONFIG,
+} from './entrenamientoUi'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -118,8 +122,13 @@ interface ProgresoInfo {
   epoca_actual: number; epocas_totales: number | null
   step_actual: number; steps_totales: number | null
   porcentaje: number; loss_actual: number | null
+  learning_rate?: number | null; grad_norm?: number | null
+  segundos_transcurridos?: number | null; segundos_restantes?: number | null
+  fold?: number | null; folds_total?: number | null
+  historial_loss?: [number, number][]
+  historial_eval?: { epoca: number; step: number; eval_loss?: number; eval_wer?: number; eval_cer?: number; eval_per?: number }[]
   ultimo_heartbeat: string | null; segundos_desde_heartbeat: number | null
-  esta_vivo: boolean | null
+  esta_vivo: boolean | null; colgado?: boolean
 }
 
 interface ProcesoItem {
@@ -141,7 +150,7 @@ interface SubirResult {
 }
 
 type Expand = ComunidadDetalle | 'loading' | null
-type Tab = 'datos' | 'modelos' | 'entrenar' | 'experimentos' | 'procesos' | 'transcribir' | 'subir'
+type Tab = 'datos' | 'modelos' | 'entrenar' | 'experimentos' | 'procesos' | 'almacenamiento' | 'guia' | 'transcribir' | 'subir'
 type DataMode = 'todos' | 'comunidades' | 'sesiones'
 
 // ── Augmentation types ────────────────────────────────────────────────────────
@@ -203,6 +212,48 @@ function EstadoBadge({ estado, isActive }: { estado: string; isActive: boolean }
   }
   if (isActive) return <span className="ent-estado ent-estado--activo">Activo</span>
   return <span className={`ent-estado ${map[estado] ?? ''}`}>{estado}</span>
+}
+
+function MetricasGrid({ metricas, style }: { metricas: Record<string, number | string>; style?: React.CSSProperties }) {
+  const entradas = Object.entries(metricas ?? {}).filter(([k]) => k !== 'progreso')
+  if (entradas.length === 0) return null
+  return (
+    <div className="ent-metrics-grid" style={style}>
+      {entradas.map(([k, v]) => (
+        <div key={k} className="ent-metric-cell">
+          <Etiqueta clave={k} className="ent-metric-key" />
+          <span className="ent-metric-val">
+            {esPorcentaje(k) && typeof v === 'number'
+              ? <WerBadge wer={v} />
+              : typeof v === 'number' ? fmtNumero(v, METRICAS[k]?.tipo) : String(v)}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function MlflowLink({ experimentId, runId }: { experimentId?: string; runId: string }) {
+  const { permissions } = useAuth()
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  if (!runId) return null
+  if (!permissions.usuarios.gestionar) {
+    return <p className="ent-mlflow">Registro en MLflow: <code>{runId.slice(0, 12)}…</code> <InfoTip entrada={{ nombre: 'MLflow', desc: 'Cuaderno de laboratorio automático donde queda guardado todo lo que se usó y lo que pasó en este entrenamiento. Solo los administradores pueden abrirlo.' }} /></p>
+  }
+  return (
+    <p className="ent-mlflow">
+      <button type="button" className="ent-btn ent-btn--ghost ent-btn--sm" disabled={busy}
+        onClick={async () => {
+          setBusy(true); setErr('')
+          try { await abrirMlflow(experimentId, runId) } catch (e) { setErr(apiErr(e, 'No se pudo abrir MLflow.')) } finally { setBusy(false) }
+        }}>
+        {busy ? <Loader2 size={12} className="spin" /> : <BarChart2 size={12} />} Ver este entrenamiento en MLflow <ExternalLink size={10} />
+      </button>
+      {' '}<InfoTip entrada={{ nombre: 'MLflow', desc: 'Cuaderno de laboratorio automático: guarda los parámetros y las curvas de pérdida, WER, CER y PER de este entrenamiento, incluso si después se borra el modelo. Se abre en una pestaña nueva.' }} />
+      {err && <span className="ent-err-sm"> {err}</span>}
+    </p>
+  )
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1075,7 +1126,7 @@ function EntrenarTab({
             </select>
           </div>
           <div className="ent-field">
-            <label className="ent-label">Modelo base <span className="ent-req">*</span></label>
+            <label className="ent-label">Modelo base <span className="ent-req">*</span> <InfoTip entrada={{ nombre: 'Modelo base', desc: 'El modelo desde el que se empieza a aprender. Puede ser uno de HuggingFace (por ejemplo Whisper) o un modelo que ya entrenaste, de cualquier lengua: en ese caso se parte de lo que ya aprendió y se afina con los datos de la lengua elegida (transferencia entre lenguas).' }} /></label>
             <select className="gl-input" value={baseExpId ? `e:${baseExpId}` : modeloId ? `m:${modeloId}` : ''}
               onChange={e => elegirModelo(e.target.value)}>
               <option value="">— Selecciona un modelo —</option>
@@ -1113,7 +1164,7 @@ function EntrenarTab({
 
         {/* Modo de selección de datos */}
         <div className="ent-field">
-          <label className="ent-label">Datos de entrenamiento <span className="ent-req">*</span></label>
+          <label className="ent-label">Datos de entrenamiento <span className="ent-req">*</span> <InfoTip entrada={{ nombre: 'Datos de entrenamiento', desc: 'Los audios con transcripción con los que aprende el modelo. Una parte (alrededor del 10-20 %) se aparta automáticamente para evaluar el WER, CER y PER; esos audios no se usan para aprender.', lectura: 'Más audios y más variedad de hablantes mejoran el resultado más que cualquier ajuste de configuración.' }} /></label>
           <div className="ent-mode-radios">
             {([
               ['todos',      'Todos los audios del sistema',      'Usa todos los audios etiquetados disponibles'],
@@ -1217,15 +1268,15 @@ function EntrenarTab({
           {showAdv && (
             <div className="ent-config-grid">
               {([
-                ['num_train_epochs', 'Épocas', 'number'],
-                ['per_device_train_batch_size', 'Batch size', 'number'],
-                ['gradient_accumulation_steps', 'Gradient accum.', 'number'],
-                ['learning_rate', 'Learning rate', 'number'],
-                ['warmup_steps', 'Warmup steps', 'number'],
-                ['whisper_language', 'Idioma Whisper', 'text'],
-              ] as [keyof typeof cfg, string, string][]).map(([k, label, type]) => (
+                ['num_train_epochs', 'number'],
+                ['per_device_train_batch_size', 'number'],
+                ['gradient_accumulation_steps', 'number'],
+                ['learning_rate', 'number'],
+                ['warmup_steps', 'number'],
+                ['whisper_language', 'text'],
+              ] as [keyof typeof cfg, string][]).map(([k, type]) => (
                 <div className="ent-field" key={k}>
-                  <label className="ent-label-sm">{label}</label>
+                  <label className="ent-label-sm">{nombreValor(k)} <InfoTip clave={k} /></label>
                   <input type={type} step={k === 'learning_rate' ? '0.000001' : undefined}
                     className="gl-input" value={String(cfg[k])}
                     onChange={e => setCfg(p => ({ ...p, [k]: type === 'number' ? +e.target.value : e.target.value }))} />
@@ -1235,8 +1286,9 @@ function EntrenarTab({
                 <label className="ent-check-label">
                   <input type="checkbox" checked={cfg.use_peft}
                     onChange={e => setCfg(p => ({ ...p, use_peft: e.target.checked }))} />
-                  <span>Usar LoRA (PEFT)</span>
+                  <span>{nombreValor('use_peft')}</span>
                 </label>
+                <InfoTip clave="use_peft" />
               </div>
             </div>
           )}
@@ -1264,6 +1316,13 @@ function EntrenarTab({
 // Monitor — HU-21
 // ══════════════════════════════════════════════════════════════════════════════
 
+const FASES: Record<string, string> = {
+  preparando: 'Preparando audios y cargando el modelo',
+  entrenando: 'Entrenando',
+  evaluando: 'Evaluando',
+  finalizando: 'Guardando el modelo',
+}
+
 function Monitor({ id, onActivated, canActivate = true }: { id: string; onActivated: () => void; canActivate?: boolean }) {
   const [estado, setEstado]     = useState<ExperimentoEstado | null>(null)
   const [activErr, setActivErr] = useState('')
@@ -1279,7 +1338,7 @@ function Monitor({ id, onActivated, canActivate = true }: { id: string; onActiva
         if (intervalRef.current) clearInterval(intervalRef.current)
       }
       if (d.estado === 'entrenando' || d.estado === 'pendiente') {
-        try { setProgreso(await apiFetch(`/entrenamiento/experimentos/${id}/progreso/`)) }
+        try { setProgreso(await apiFetch(`/entrenamiento/experimentos/${id}/progreso/`)); setProgresoUnavailable(false) }
         catch (e) { if (isNotFound(e)) setProgresoUnavailable(true) }
       }
     } catch { /* silencio */ }
@@ -1287,7 +1346,7 @@ function Monitor({ id, onActivated, canActivate = true }: { id: string; onActiva
 
   useEffect(() => {
     poll()
-    intervalRef.current = setInterval(poll, 15000)
+    intervalRef.current = setInterval(poll, 10000)
     return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
   }, [poll])
 
@@ -1317,54 +1376,99 @@ function Monitor({ id, onActivated, canActivate = true }: { id: string; onActiva
       {isRunning && (
         <div className="ent-monitor-running">
           <Loader2 size={18} className="spin" />
-          <div>
-            <p className="ent-monitor-msg">Entrenando… actualización cada 15 s</p>
-            <p className="ent-monitor-sub2">Train: {estado.num_muestras_train} · Eval: {estado.num_muestras_eval} muestras</p>
-            {progreso && (
+          <div className="ent-monitor-body">
+            <p className="ent-monitor-msg">
+              {FASES[progreso?.fase ?? 'preparando'] ?? 'Entrenando'}… se actualiza cada 10 s
+              {progreso?.folds_total && progreso.folds_total > 1 && progreso.fold != null ? ` · fold ${progreso.fold} de ${progreso.folds_total}` : ''}
+            </p>
+            <p className="ent-monitor-sub2">
+              Audios de entrenamiento: {estado.num_muestras_train} · de evaluación: {estado.num_muestras_eval}
+              <InfoTip clave="num_muestras_train" />
+            </p>
+
+            {progreso ? (
               <div className="ent-progreso-live">
                 <div className="ent-prog-wrap">
                   <div className="ent-prog-bar">
                     <div
-                      className={`ent-prog-fill ${progreso.esta_vivo === false ? 'ent-prog--low' : 'ent-prog--high'}`}
+                      className={`ent-prog-fill ${progreso.colgado || progreso.esta_vivo === false ? 'ent-prog--low' : 'ent-prog--high'}`}
                       style={{ width: `${progreso.porcentaje}%` }}
                     />
                   </div>
-                  <span className="ent-prog-pct">{progreso.porcentaje.toFixed(1)}%</span>
+                  <span className="ent-prog-pct">{progreso.porcentaje.toFixed(1)} %</span>
                 </div>
-                <p className="ent-monitor-sub2">
-                  Época {progreso.epoca_actual.toFixed(1)}{progreso.epocas_totales != null ? `/${progreso.epocas_totales}` : ''}
-                  {progreso.loss_actual != null && ` · loss ${progreso.loss_actual.toFixed(4)}`}
-                  {progreso.esta_vivo === false && ' · sin heartbeat reciente (posible cuelgue)'}
-                </p>
+
+                <div className="ent-live-grid">
+                  <div className="ent-live-cell"><Etiqueta clave="epoca" className="ent-live-key" />
+                    <span className="ent-live-val">{progreso.epoca_actual.toFixed(1)}{progreso.epocas_totales != null ? ` de ${progreso.epocas_totales}` : ''}</span></div>
+                  <div className="ent-live-cell"><Etiqueta clave="paso" className="ent-live-key" />
+                    <span className="ent-live-val">{progreso.step_actual.toLocaleString('es-CO')}{progreso.steps_totales != null ? ` de ${progreso.steps_totales.toLocaleString('es-CO')}` : ''}</span></div>
+                  <div className="ent-live-cell"><Etiqueta clave="loss" className="ent-live-key" />
+                    <span className="ent-live-val">{progreso.loss_actual != null ? progreso.loss_actual.toFixed(4) : '—'}</span></div>
+                  <div className="ent-live-cell"><Etiqueta clave="learning_rate" className="ent-live-key" />
+                    <span className="ent-live-val">{progreso.learning_rate != null ? progreso.learning_rate.toExponential(2) : '—'}</span></div>
+                  <div className="ent-live-cell"><Etiqueta clave="grad_norm" className="ent-live-key" />
+                    <span className="ent-live-val">{progreso.grad_norm != null ? progreso.grad_norm.toFixed(2) : '—'}</span></div>
+                  <div className="ent-live-cell"><Etiqueta clave="restante" className="ent-live-key" />
+                    <span className="ent-live-val">{fmtDuracion(progreso.segundos_restantes)}</span></div>
+                  <div className="ent-live-cell"><Etiqueta clave="latido" className="ent-live-key" />
+                    <span className="ent-live-val">{progreso.segundos_desde_heartbeat != null ? `hace ${progreso.segundos_desde_heartbeat} s` : 'sin datos'}</span></div>
+                </div>
+
+                {progreso.colgado && (
+                  <p className="ent-err-sm">Sin latido hace más de 10 minutos: el proceso parece colgado. Puedes detenerlo desde la pestaña Procesos.</p>
+                )}
+
+                {(progreso.historial_loss?.length ?? 0) > 1 && (
+                  <div className="ent-chart-box">
+                    <p className="ent-live-key">Curva de pérdida de entrenamiento <InfoTip clave="loss" /></p>
+                    <Sparkline puntos={progreso.historial_loss!} />
+                  </div>
+                )}
+
+                {(progreso.historial_eval?.length ?? 0) > 0 && (
+                  <div className="ent-chart-box">
+                    <p className="ent-live-key">Evaluaciones (una por época) <InfoTip entrada={{ nombre: 'Evaluaciones por época', desc: 'Al final de cada época el modelo transcribe los audios de evaluación y se miden la pérdida de validación, el WER, el CER y el PER. Deben ir bajando; si la pérdida de validación sube, el modelo empieza a memorizar.' }} /></p>
+                    <div className="ent-table-wrap">
+                      <table className="ent-table ent-table--sm">
+                        <thead><tr>
+                          <th>Época</th>
+                          <th>Pérd. validación</th>
+                          <th>WER <InfoTip clave="eval_wer" /></th>
+                          <th>CER <InfoTip clave="eval_cer" /></th>
+                          <th>PER <InfoTip clave="eval_per" /></th>
+                        </tr></thead>
+                        <tbody>
+                          {progreso.historial_eval!.slice(-8).map(h => (
+                            <tr key={h.step}>
+                              <td>{h.epoca}</td>
+                              <td>{h.eval_loss != null ? h.eval_loss.toFixed(4) : '—'}</td>
+                              <td>{h.eval_wer != null ? <WerBadge wer={h.eval_wer} /> : '—'}</td>
+                              <td>{h.eval_cer != null ? <WerBadge wer={h.eval_cer} /> : '—'}</td>
+                              <td>{h.eval_per != null ? <WerBadge wer={h.eval_per} /> : '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
+            ) : progresoUnavailable ? (
+              <p className="ent-hint" style={{ marginTop: 4 }}>
+                El servidor aún no ofrece el progreso en vivo. Se activará con el próximo despliegue del backend y para los entrenamientos que se lancen después.
+              </p>
+            ) : (
+              <p className="ent-hint" style={{ marginTop: 4 }}>Leyendo el progreso…</p>
             )}
-            {progresoUnavailable && <p className="ent-hint" style={{ marginTop: 4 }}>Progreso detallado (época/step/loss) no disponible aún en el servidor.</p>}
           </div>
         </div>
       )}
 
       {isDone && (
         <div className="ent-monitor-done">
-          {Object.keys(estado.metricas ?? {}).length > 0 && (
-            <div className="ent-metrics-grid">
-              {Object.entries(estado.metricas).map(([k, v]) => (
-                <div key={k} className="ent-metric-cell">
-                  <span className="ent-metric-key">{k.replace(/_/g, ' ')}</span>
-                  <span className="ent-metric-val">
-                    {k === 'eval_wer' || k === 'eval_cer'
-                      ? <WerBadge wer={v} />
-                      : typeof v === 'number' && v < 100 ? v.toFixed(4) : v}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-          {estado.mlflow_run_id && (
-            <p className="ent-mlflow">
-              MLflow: <a href={`http://localhost:5000/#/experiments/${estado.mlflow_experiment_id ?? '1'}/runs/${estado.mlflow_run_id}`}
-                target="_blank" rel="noreferrer">{estado.mlflow_run_id.slice(0, 12)}…</a>
-            </p>
-          )}
+          <MetricasGrid metricas={estado.metricas} />
+          <MlflowLink experimentId={estado.mlflow_experiment_id} runId={estado.mlflow_run_id} />
           {canActivate && !estado.is_active && (
             <button className="ent-btn ent-btn--primary" onClick={activar} type="button">
               <Zap size={13} /> Activar este modelo
@@ -1395,7 +1499,6 @@ function ExperimentosTab({ monitorId, onClearMonitor, canManage, onReentrenar }:
   const [expandId, setExpandId]   = useState<string | null>(null)
   const [detail, setDetail]       = useState<ExperimentoDetalle | null>(null)
   const [activErr, setActivErr]   = useState('')
-  const { permissions: permsExp } = useAuth()
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -1422,8 +1525,6 @@ function ExperimentosTab({ monitorId, onClearMonitor, canManage, onReentrenar }:
 
   return (
     <div className="ent-section">
-      {permsExp.usuarios.gestionar && <AlmacenamientoPanel />}
-
       {monitorId && (
         <div className="ent-monitor-box">
           <div className="ent-monitor-box-head">
@@ -1458,7 +1559,7 @@ function ExperimentosTab({ monitorId, onClearMonitor, canManage, onReentrenar }:
         <div className="ent-table-wrap">
           <table className="ent-table">
             <thead>
-              <tr><th /><th>Nombre</th><th>Lengua</th><th>Modelo</th><th>WER</th><th>Muestras</th><th>Estado</th><th>Fecha</th><th /></tr>
+              <tr><th /><th>Nombre</th><th>Lengua</th><th>Modelo</th><th>WER <InfoTip clave="eval_wer" /></th><th>CER <InfoTip clave="eval_cer" /></th><th>PER <InfoTip clave="eval_per" /></th><th>Audios</th><th>Estado</th><th>Fecha</th><th /></tr>
             </thead>
             <tbody>
               {exps.flatMap(exp => {
@@ -1476,6 +1577,8 @@ function ExperimentosTab({ monitorId, onClearMonitor, canManage, onReentrenar }:
                     <td>{exp.lengua_nombre}</td>
                     <td><span className="ent-tipo-pill">{exp.modelo_nombre?.split('/')[1] ?? exp.modelo_nombre}</span></td>
                     <td>{exp.metricas?.eval_wer != null ? <WerBadge wer={exp.metricas.eval_wer} /> : '—'}</td>
+                    <td>{exp.metricas?.eval_cer != null ? <WerBadge wer={exp.metricas.eval_cer} /> : '—'}</td>
+                    <td>{exp.metricas?.eval_per != null ? <WerBadge wer={exp.metricas.eval_per} /> : <span className="ent-hint" title="Este entrenamiento es anterior a la métrica PER">—</span>}</td>
                     <td>{exp.num_muestras_train + exp.num_muestras_eval}</td>
                     <td><EstadoBadge estado={exp.estado} isActive={exp.is_active} /></td>
                     <td>{new Date(exp.created_at).toLocaleDateString('es-CO')}</td>
@@ -1502,20 +1605,20 @@ function ExperimentosTab({ monitorId, onClearMonitor, canManage, onReentrenar }:
 
                 const detailRow = (
                   <tr key={`${exp.id}-d`} className="ent-exp-detail-row">
-                    <td colSpan={9}>
+                    <td colSpan={11}>
                       {!detail ? (
                         <div className="ent-loading-sm"><Loader2 size={13} className="spin" /> Cargando detalle…</div>
                       ) : (
                         <div className="ent-exp-detail">
                           <div className="ent-detail-grid">
                             <div><p className="ent-detail-key">Datos usados</p><p className="ent-detail-val">{formatComunidades(exp.comunidades_usadas)}</p></div>
-                            <div><p className="ent-detail-key">Train / Eval</p><p className="ent-detail-val">{detail.num_muestras_train} / {detail.num_muestras_eval}</p></div>
+                            <div><p className="ent-detail-key">Audios entrenamiento / evaluación <InfoTip clave="num_muestras_train" /></p><p className="ent-detail-val">{detail.num_muestras_train} / {detail.num_muestras_eval}</p></div>
                             {detail.config_entrenamiento && Object.entries(detail.config_entrenamiento).map(([k, v]) => {
                               if (k === 'augmentation') return null
                               return (
                                 <div key={k}>
-                                  <p className="ent-detail-key">{k.replace(/_/g, ' ')}</p>
-                                  <p className="ent-detail-val">{String(v)}</p>
+                                  <p className="ent-detail-key">{nombreValor(k)} {CONFIG[k] && <InfoTip clave={k} />}</p>
+                                  <p className="ent-detail-val">{typeof v === 'boolean' ? (v ? 'Sí' : 'No') : String(v)}</p>
                                 </div>
                               )
                             })}
@@ -1524,26 +1627,8 @@ function ExperimentosTab({ monitorId, onClearMonitor, canManage, onReentrenar }:
                           {!!detail.config_entrenamiento?.augmentation && (
                             <AugmentationDetailBlock aug={detail.config_entrenamiento.augmentation as AugConfig} />
                           )}
-                          {Object.keys(detail.metricas ?? {}).length > 0 && (
-                            <div className="ent-metrics-grid" style={{ marginTop: 12 }}>
-                              {Object.entries(detail.metricas).map(([k, v]) => (
-                                <div key={k} className="ent-metric-cell">
-                                  <span className="ent-metric-key">{k.replace(/_/g, ' ')}</span>
-                                  <span className="ent-metric-val">
-                                    {k === 'eval_wer' || k === 'eval_cer'
-                                      ? <WerBadge wer={v} />
-                                      : typeof v === 'number' && v < 100 ? v.toFixed(4) : v}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          {detail.mlflow_run_id && (
-                            <p className="ent-mlflow" style={{ marginTop: 10 }}>
-                              MLflow: <a href={`http://localhost:5000/#/experiments/${detail.mlflow_experiment_id ?? '1'}/runs/${detail.mlflow_run_id}`}
-                                target="_blank" rel="noreferrer">{detail.mlflow_run_id}</a>
-                            </p>
-                          )}
+                          <MetricasGrid metricas={detail.metricas} style={{ marginTop: 12 }} />
+                          <MlflowLink experimentId={detail.mlflow_experiment_id} runId={detail.mlflow_run_id} />
                           {detail.error_mensaje && <p className="ent-err-sm" style={{ marginTop: 8 }}>{detail.error_mensaje}</p>}
                           {(exp.estado === 'entrenando' || exp.estado === 'pendiente') && (
                             <div style={{ marginTop: 12 }}><Monitor id={exp.id} onActivated={load} canActivate={canManage} /></div>
@@ -2200,7 +2285,7 @@ function ProcesosTab() {
           <div className="ent-table-wrap">
             <table className="ent-table">
               <thead>
-                <tr><th>Nombre</th><th>Lengua</th><th>Modelo</th><th>Progreso</th><th>Último heartbeat</th><th>Estado</th><th /></tr>
+                <tr><th>Nombre</th><th>Lengua</th><th>Modelo</th><th>Progreso</th><th>Último latido <InfoTip clave="latido" /></th><th>Estado</th><th /></tr>
               </thead>
               <tbody>
                 {data.procesos.map(p => (
@@ -2254,12 +2339,14 @@ function ProcesosTab() {
 // Page
 // ══════════════════════════════════════════════════════════════════════════════
 
-const ALL_TABS: { id: Tab; label: string; Icon: LucideIcon; minRole: 'all' | 'canUpload' | 'canManage' | 'verProgreso' }[] = [
+const ALL_TABS: { id: Tab; label: string; Icon: LucideIcon; minRole: 'all' | 'canUpload' | 'canManage' | 'verProgreso' | 'admin' }[] = [
   { id: 'datos',        label: 'Datos',        Icon: Database,  minRole: 'all'        },
   { id: 'modelos',      label: 'Modelos',      Icon: Cpu,       minRole: 'all'        },
   { id: 'entrenar',     label: 'Entrenar',     Icon: Play,      minRole: 'canManage'  },
   { id: 'experimentos', label: 'Experimentos', Icon: BarChart2, minRole: 'all'        },
   { id: 'procesos',     label: 'Procesos',     Icon: Server,    minRole: 'verProgreso'},
+  { id: 'almacenamiento', label: 'Almacenamiento', Icon: HardDrive, minRole: 'admin'    },
+  { id: 'guia',         label: 'Guía',         Icon: BookOpen,  minRole: 'all'        },
   { id: 'transcribir',  label: 'Transcribir',  Icon: Mic,       minRole: 'all'        },
   { id: 'subir',        label: 'Subir datos',  Icon: FolderPlus,minRole: 'canUpload'  },
 ]
@@ -2275,6 +2362,7 @@ export default function Entrenamiento() {
     || (t.minRole === 'canManage' && canManage)
     || (t.minRole === 'canUpload' && canUpload)
     || (t.minRole === 'verProgreso' && canVerProgreso)
+    || (t.minRole === 'admin' && permissions.usuarios.gestionar)
   )
 
   const [tab, setTab]               = useState<Tab>('datos')
@@ -2321,6 +2409,10 @@ export default function Entrenamiento() {
             onReentrenar={canManage ? (id => { setReentrenarDe(id); setTab('entrenar') }) : undefined} />
         )}
         {activeTab === 'procesos' && <ProcesosTab />}
+        {activeTab === 'almacenamiento' && permissions.usuarios.gestionar && (
+          <div className="ent-section"><AlmacenamientoPanel /></div>
+        )}
+        {activeTab === 'guia' && <EntrenamientoGuia />}
         {activeTab === 'transcribir' && <TranscribirTab />}
         {activeTab === 'subir' && canUpload && <SubirTab />}
       </div>

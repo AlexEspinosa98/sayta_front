@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, BarChart2, CheckCircle2, ExternalLink, HardDrive, Loader2, RefreshCw, Trash2 } from 'lucide-react'
 import { apiErr, apiFetch } from '../api'
+import { abrirMlflow as abrirMlflowAdmin, InfoTip } from './entrenamientoUi'
 
 /**
  * Almacenamiento de modelos entrenados (solo administrador).
@@ -43,16 +44,23 @@ export default function AlmacenamientoPanel() {
   const [mlflowBusy, setMlflowBusy] = useState(false)
 
   const load = useCallback(async () => {
+    // Se conservan los datos anteriores mientras se recalcula y se mantiene la posición de la página:
+    // antes, al recalcular, el panel se vaciaba y la página saltaba hacia arriba.
+    const y = window.scrollY
     setLoading(true); setError('')
     try { setData(await apiFetch('/entrenamiento/almacenamiento/') as Resumen) }
     catch (e) { setError(apiErr(e, 'No se pudo calcular el almacenamiento.')) }
-    finally { setLoading(false) }
+    finally {
+      setLoading(false)
+      requestAnimationFrame(() => window.scrollTo({ top: y }))
+    }
   }, [])
 
   useEffect(() => { load() }, [load])
 
   async function ejecutar(clave: string, url: string, modo: string, confirmacion: string) {
     if (!window.confirm(confirmacion)) return
+    const y = window.scrollY
     setBusy(clave); setMsg(''); setError('')
     try {
       const r = await apiFetch(url, { method: 'POST', body: JSON.stringify({ modo }) }) as { liberado_bytes: number; omitidos?: { nombre: string; motivo: string }[] }
@@ -60,14 +68,13 @@ export default function AlmacenamientoPanel() {
         (r.omitidos?.length ? ` Se omitieron ${r.omitidos.length}: ${r.omitidos.map(o => `${o.nombre} (${o.motivo})`).join('; ')}` : ''))
       await load()
     } catch (e) { setError(apiErr(e, 'No se pudo completar la limpieza.')) }
-    finally { setBusy(null) }
+    finally { setBusy(null); requestAnimationFrame(() => window.scrollTo({ top: y })) }
   }
 
   async function abrirMlflow() {
     setMlflowBusy(true); setError('')
     try {
-      await apiFetch('/entrenamiento/mlflow/acceso/', { method: 'POST', body: '{}' })
-      window.open('/mlflow/', '_blank', 'noopener')
+      await abrirMlflowAdmin()
     } catch (e) { setError(apiErr(e, 'No se pudo abrir MLflow.')) }
     finally { setMlflowBusy(false) }
   }
@@ -77,7 +84,9 @@ export default function AlmacenamientoPanel() {
   return (
     <div className="ent-monitor-box" style={{ marginBottom: 20 }}>
       <div className="ent-monitor-box-head">
-        <span className="ent-subsection-title"><HardDrive size={13} /> Almacenamiento de modelos (administrador)</span>
+        <span className="ent-subsection-title"><HardDrive size={13} /> Almacenamiento de modelos (administrador)
+          <InfoTip entrada={{ nombre: 'Almacenamiento de modelos', desc: 'Cada entrenamiento deja checkpoints (copias intermedias) y un modelo final que ocupan mucho disco. Aquí puedes borrarlos para liberar espacio.', lectura: 'Borrar archivos nunca elimina el experimento ni sus métricas (WER, CER, PER y MLflow). Solo se pierde la posibilidad de activar, usar o reentrenar el modelo borrado.' }} />
+        </span>
         <div style={{ display: 'flex', gap: 6 }}>
           <button className="ent-btn ent-btn--ghost ent-btn--sm" onClick={abrirMlflow} disabled={mlflowBusy} type="button"
             title="Abre MLflow con las métricas de todos los entrenamientos">

@@ -3633,3 +3633,38 @@ a.contact-card .contact-card-icon { background: var(--blue); color: var(--white)
 .eg-hist-sub { font-size: .95rem; margin: 14px 0 8px; }
 .eg-hist-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
 .eg-hist-table th, .eg-hist-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border, #e1e6e8); }
+
+/* ── Entrenamiento: botón «i», monitor en vivo y guía ───────────────────── */
+.info-tip {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; margin-left: 4px; padding: 0; vertical-align: middle;
+  border: 1px solid var(--gray-300, #cbd5e1); border-radius: 50%;
+  background: transparent; color: var(--gray-500, #64748b); cursor: pointer;
+}
+.info-tip:hover, .info-tip--open { color: var(--blue, #2563eb); border-color: var(--blue, #2563eb); background: rgba(37, 99, 235, .08); }
+.info-tip:focus-visible { outline: 2px solid var(--blue, #2563eb); outline-offset: 2px; }
+.info-tip-pop {
+  position: fixed; z-index: 1000; width: min(320px, calc(100vw - 24px));
+  padding: 12px 14px; border-radius: 10px; text-align: left; font-weight: 400;
+  background: var(--surface, #fff); color: var(--text, #0f172a);
+  border: 1px solid var(--gray-200, #e2e8f0); box-shadow: 0 10px 30px rgba(15, 23, 42, .18);
+}
+.info-tip-title { margin: 0 0 4px; font-size: .85rem; font-weight: 700; }
+.info-tip-text { margin: 0 0 6px; font-size: .8rem; line-height: 1.45; }
+.info-tip-text:last-child { margin-bottom: 0; }
+.info-tip-read { color: var(--gray-600, #475569); }
+.ent-monitor-body { flex: 1; min-width: 0; }
+.ent-live-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin: 10px 0; }
+.ent-live-cell { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border: 1px solid var(--gray-200, #e2e8f0); border-radius: 8px; }
+.ent-live-key { font-size: .72rem; color: var(--gray-500, #64748b); margin: 0; }
+.ent-live-val { font-size: .95rem; font-weight: 700; }
+.ent-chart-box { margin-top: 10px; }
+.ent-spark { width: 100%; max-width: 420px; height: auto; color: var(--blue, #2563eb); }
+.ent-spark-lbl { font-size: 9px; fill: var(--gray-500, #64748b); }
+.guia { max-width: 980px; }
+.guia-bloque { margin-bottom: 26px; }
+.guia-bloque h3 { margin: 0 0 8px; font-size: 1.05rem; }
+.guia-lista { margin: 6px 0 10px; padding-left: 20px; display: grid; gap: 6px; font-size: .88rem; line-height: 1.5; }
+.guia-nota { padding: 12px 14px; margin-bottom: 12px; border-radius: 10px; border: 1px solid var(--gray-200, #e2e8f0); background: rgba(37, 99, 235, .04); font-size: .88rem; line-height: 1.5; }
+.guia-nota p { margin: 0 0 8px; }
+.guia-tabla td { vertical-align: top; }
