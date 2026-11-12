@@ -233,6 +233,26 @@ function MetricasGrid({ metricas, style }: { metricas: Record<string, number | s
   )
 }
 
+function BotonMlflow() {
+  const { permissions } = useAuth()
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  if (!permissions.usuarios.gestionar) return null
+  return (
+    <span>
+      <button type="button" className="ent-btn ent-btn--ghost" disabled={busy}
+        onClick={async () => {
+          setBusy(true); setErr('')
+          try { await abrirMlflow() } catch (e) { setErr(apiErr(e, 'No se pudo abrir MLflow.')) } finally { setBusy(false) }
+        }}>
+        {busy ? <Loader2 size={13} className="spin" /> : <BarChart2 size={13} />} Abrir MLflow <ExternalLink size={11} />
+      </button>
+      <InfoTip entrada={{ nombre: 'MLflow', desc: 'Cuaderno de laboratorio automático: guarda los parámetros y las curvas de pérdida, WER, CER y PER de todos los entrenamientos, uno por lengua (sayta-asr-<lengua>). Se abre en una pestaña nueva y es solo para administradores.', lectura: 'Marca varios entrenamientos y pulsa Compare para verlos lado a lado.' }} />
+      {err && <span className="ent-err-sm"> {err}</span>}
+    </span>
+  )
+}
+
 function MlflowLink({ experimentId, runId }: { experimentId?: string; runId: string }) {
   const { permissions } = useAuth()
   const [busy, setBusy] = useState(false)
@@ -1538,6 +1558,7 @@ function ExperimentosTab({ monitorId, onClearMonitor, canManage, onReentrenar }:
       <div className="ent-section-head">
         <h2 className="ent-section-title">Historial de experimentos</h2>
         <div className="ent-filter-row">
+          <BotonMlflow />
           <select className="gl-input ent-filter-sel" value={filterEstado} onChange={e => setFilter(e.target.value)}>
             <option value="">Todos</option>
             <option value="entrenando">Entrenando</option>
