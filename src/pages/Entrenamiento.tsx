@@ -239,7 +239,7 @@ function BotonMlflow() {
   const [err, setErr] = useState('')
   if (!permissions.usuarios.gestionar) return null
   return (
-    <span>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap', flexWrap: 'wrap' }}>
       <button type="button" className="ent-btn ent-btn--ghost" disabled={busy}
         onClick={async () => {
           setBusy(true); setErr('')
@@ -652,7 +652,7 @@ function ModelosTab({ canManage }: { canManage: boolean }) {
           <h3 className="ent-subsection-title" style={{ marginTop: 8 }}>Modelos en servidor local ({descargados.length})</h3>
           <div className="ent-table-wrap">
             <table className="ent-table">
-              <thead><tr><th /><th>Modelo</th><th>Tipo</th><th>Ruta</th><th>Descargado</th></tr></thead>
+              <thead><tr><th><span className="sr-only">Ver experimentos</span></th><th>Modelo</th><th>Tipo</th><th>Ruta</th><th>Descargado</th></tr></thead>
               <tbody>
                 {descargados.flatMap(m => {
                   const exps = expExpand[m.id]
@@ -660,6 +660,7 @@ function ModelosTab({ canManage }: { canManage: boolean }) {
                     <tr key={m.id}>
                       <td>
                         <button className="ent-btn-icon" onClick={() => toggleExpExps(m)} type="button"
+                          aria-expanded={exps !== undefined} aria-label={`Ver experimentos entrenados con ${m.nombre_hf}`}
                           title="Ver experimentos entrenados con este modelo">
                           {exps !== undefined ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                         </button>
@@ -1137,7 +1138,7 @@ function EntrenarTab({
         <div className="ent-form-row">
           <div className="ent-field">
             <label className="ent-label">Lengua <span className="ent-req">*</span></label>
-            <select className="gl-input" value={lenguaId}
+            <select className="gl-input" aria-label="Lengua a entrenar" value={lenguaId}
               onChange={e => setLenguaId(Number(e.target.value) as number | '')}>
               <option value="">— Selecciona una lengua —</option>
               {lenguasASR.map(l => (
@@ -1147,7 +1148,7 @@ function EntrenarTab({
           </div>
           <div className="ent-field">
             <label className="ent-label">Modelo base <span className="ent-req">*</span> <InfoTip entrada={{ nombre: 'Modelo base', desc: 'El modelo desde el que se empieza a aprender. Puede ser uno de HuggingFace (por ejemplo Whisper) o un modelo que ya entrenaste, de cualquier lengua: en ese caso se parte de lo que ya aprendió y se afina con los datos de la lengua elegida (transferencia entre lenguas).' }} /></label>
-            <select className="gl-input" value={baseExpId ? `e:${baseExpId}` : modeloId ? `m:${modeloId}` : ''}
+            <select className="gl-input" aria-label="Modelo base o modelo ya entrenado" value={baseExpId ? `e:${baseExpId}` : modeloId ? `m:${modeloId}` : ''}
               onChange={e => elegirModelo(e.target.value)}>
               <option value="">— Selecciona un modelo —</option>
               <optgroup label="Modelos base (HuggingFace)">
@@ -1559,14 +1560,14 @@ function ExperimentosTab({ monitorId, onClearMonitor, canManage, onReentrenar }:
         <h2 className="ent-section-title">Historial de experimentos</h2>
         <div className="ent-filter-row">
           <BotonMlflow />
-          <select className="gl-input ent-filter-sel" value={filterEstado} onChange={e => setFilter(e.target.value)}>
+          <select className="gl-input ent-filter-sel" aria-label="Filtrar experimentos por estado" value={filterEstado} onChange={e => setFilter(e.target.value)}>
             <option value="">Todos</option>
             <option value="entrenando">Entrenando</option>
             <option value="completado">Completado</option>
             <option value="activo">Activo</option>
             <option value="fallido">Fallido</option>
           </select>
-          <button className="ent-btn ent-btn--ghost" onClick={load} type="button"><RefreshCw size={13} /></button>
+          <button className="ent-btn ent-btn--ghost" onClick={load} type="button" aria-label="Actualizar la lista de experimentos" title="Actualizar"><RefreshCw size={13} aria-hidden="true" /></button>
         </div>
       </div>
 
@@ -1580,14 +1581,15 @@ function ExperimentosTab({ monitorId, onClearMonitor, canManage, onReentrenar }:
         <div className="ent-table-wrap">
           <table className="ent-table">
             <thead>
-              <tr><th /><th>Nombre</th><th>Lengua</th><th>Modelo</th><th>WER <InfoTip clave="eval_wer" /></th><th>CER <InfoTip clave="eval_cer" /></th><th>PER <InfoTip clave="eval_per" /></th><th>Audios</th><th>Estado</th><th>Fecha</th><th /></tr>
+              <tr><th><span className="sr-only">Ver detalle</span></th><th>Nombre</th><th>Lengua</th><th>Modelo</th><th>WER <InfoTip clave="eval_wer" /></th><th>CER <InfoTip clave="eval_cer" /></th><th>PER <InfoTip clave="eval_per" /></th><th>Audios</th><th>Estado</th><th>Fecha</th><th><span className="sr-only">Acciones</span></th></tr>
             </thead>
             <tbody>
               {exps.flatMap(exp => {
                 const main = (
                   <tr key={exp.id} className={`ent-exp-row${exp.is_active ? ' ent-exp-row--active' : ''}`}>
                     <td>
-                      <button className="ent-btn-icon" onClick={() => expandDetalle(exp.id)} type="button">
+                      <button className="ent-btn-icon" onClick={() => expandDetalle(exp.id)} type="button"
+                        aria-expanded={expandId === exp.id} aria-label={`${expandId === exp.id ? 'Ocultar' : 'Ver'} detalle de ${exp.nombre}`}>
                         {expandId === exp.id ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                       </button>
                     </td>
@@ -1790,7 +1792,7 @@ function TranscribirTab() {
       <div className="ent-form">
         <div className="ent-field">
           <label className="ent-label">Lengua <span className="ent-req">*</span></label>
-          <select className="gl-input" value={lenguaId} onChange={e => setLenguaId(Number(e.target.value))}>
+          <select className="gl-input" aria-label="Lengua del audio" value={lenguaId} onChange={e => setLenguaId(Number(e.target.value))}>
             <option value="">— Selecciona —</option>
             {lenguasASR.map(l => (
               <option key={l.id} value={l.id}>{l.nombre} ({l.codigo})</option>
@@ -2306,7 +2308,7 @@ function ProcesosTab() {
           <div className="ent-table-wrap">
             <table className="ent-table">
               <thead>
-                <tr><th>Nombre</th><th>Lengua</th><th>Modelo</th><th>Progreso</th><th>Último latido <InfoTip clave="latido" /></th><th>Estado</th><th /></tr>
+                <tr><th>Nombre</th><th>Lengua</th><th>Modelo</th><th>Progreso</th><th>Último latido <InfoTip clave="latido" /></th><th>Estado</th><th><span className="sr-only">Acciones</span></th></tr>
               </thead>
               <tbody>
                 {data.procesos.map(p => (

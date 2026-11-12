@@ -676,6 +676,10 @@ function TerminoInlineForm({ title, form, setForm, lenguas, error, saving, onSav
         onDelete={kb.deleteChar}
         onSpace={() => kb.insertAtCursor(' ')}
         onEnter={() => kb.insertAtCursor('\n')}
+        onAccent={kb.acentuar}
+        aviso={kb.aviso}
+        valor={activeValue}
+        onReplace={activeOnChange}
       />
     </>
   )

@@ -182,7 +182,7 @@ export default function Usuarios() {
 
       <div className="gl-tabs-bar">
         <div className="container">
-          <div className="gl-tabs" role="tablist" aria-label="Administración">
+          <div className="gl-tabs" role="navigation" aria-label="Administración">
             <NavLink to="/admin/usuarios" className={({ isActive }) => `gl-tab ${isActive ? 'gl-tab--active' : ''}`}>
               <Users size={15} /> Usuarios
             </NavLink>

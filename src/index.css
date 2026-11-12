@@ -10,7 +10,7 @@
 
   /* Acento teal */
   --teal:        #00aebf;
-  --teal-dark:   #00839a;   /* teal seguro para texto */
+  --teal-dark:   #00697e;   /* teal para texto: ≥ 4,5:1 sobre blanco y sobre --teal-light (WCAG AA) */
   --teal-bright: #00f5f7;
   --teal-light:  #e3f6f8;
 
@@ -31,7 +31,7 @@
   --gray-200:   #e4eaf1;
   --gray-300:   #d3dce6;
   --gray-400:   #9aa7b6;
-  --gray-500:   #6b7a8c;
+  --gray-500:   #566578;   /* texto secundario: ≥ 4,5:1 sobre blanco y fondos claros (WCAG AA) */
   --gray-600:   #46586b;
   --gray-700:   #33475b;
   --gray-900:   #0c1f33;

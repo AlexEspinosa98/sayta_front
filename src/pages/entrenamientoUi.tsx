@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { Info } from 'lucide-react'
 import { apiFetch } from '../api'
 
@@ -251,13 +252,14 @@ export function InfoTip({ entrada, clave, children }: { entrada?: EntradaGlosari
         onClick={ev => { ev.stopPropagation(); setAbierto(a => !a) }}>
         <Info size={13} />
       </button>
-      {abierto && (
-        <div ref={pop} className="info-tip-pop" role="dialog" style={{ top: pos?.top ?? -9999, left: pos?.left ?? -9999 }}>
+      {abierto && createPortal(
+        <div ref={pop} className="info-tip-pop" role="dialog" aria-label={e?.nombre} style={{ top: pos?.top ?? -9999, left: pos?.left ?? -9999 }}>
           {e && <p className="info-tip-title">{e.nombre}</p>}
           {e && <p className="info-tip-text">{e.desc}</p>}
           {e?.lectura && <p className="info-tip-text info-tip-read"><strong>Cómo leerlo:</strong> {e.lectura}</p>}
           {children}
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   )

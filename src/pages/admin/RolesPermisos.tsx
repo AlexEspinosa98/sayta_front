@@ -331,7 +331,7 @@ export default function RolesPermisos() {
 
       <div className="gl-tabs-bar">
         <div className="container">
-          <div className="gl-tabs rmp-admin-tabs" role="tablist" aria-label="Administración">
+          <div className="gl-tabs rmp-admin-tabs" role="navigation" aria-label="Administración">
             <NavLink to="/admin/usuarios" className={({ isActive }) => `gl-tab ${isActive ? 'gl-tab--active' : ''}`}>
               <Users size={15} /> Usuarios
             </NavLink>
@@ -339,7 +339,7 @@ export default function RolesPermisos() {
               <KeyRound size={15} /> Roles y permisos
             </NavLink>
           </div>
-          <div className="gl-tabs" role="tablist" aria-label="Administración de permisos">
+          <div className="gl-tabs" role="navigation" aria-label="Administración de permisos">
             <button className={`gl-tab ${tab === 'roles' ? 'gl-tab--active' : ''}`} onClick={() => setTab('roles')}><KeyRound size={15} /> Roles</button>
             <button className={`gl-tab ${tab === 'modulos' ? 'gl-tab--active' : ''}`} onClick={() => setTab('modulos')}><Boxes size={15} /> Módulos</button>
             <button className={`gl-tab ${tab === 'submodulos' ? 'gl-tab--active' : ''}`} onClick={() => setTab('submodulos')}><Layers3 size={15} /> Submódulos</button>

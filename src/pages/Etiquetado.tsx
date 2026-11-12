@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Mic, FolderOpen, BarChart2, RefreshCw, AlertCircle,
   Music, BookOpen, Tag, Check, Trash2, Edit2, X, ArrowLeft,
@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { API_BASE, TOKEN_KEY, apiErr, apiFetch } from '../api'
 import { useAuth } from '../context/AuthContext'
+import { useSpecialKeyboard, SpecialKeyboardPanel, SpecialKeyboardToggle } from '../components/SpecialKeyboard'
 
 /* ═══════════════════════════════════════════════════════
    TYPES
@@ -700,6 +701,8 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
   const isLabeled = audio.etiquetado
   const isBusy    = mode === 'saving' || mode === 'deleting'
   const inputId   = `lbl-${audio.nombre.replace(/[^a-z0-9]/gi, '-')}`
+  const inputRef  = useRef<HTMLInputElement>(null)
+  const kb        = useSpecialKeyboard(inputRef, inputVal, setInputVal)
 
   function startEdit()  { setInputVal(audio.etiqueta ?? ''); setApiError(null); setMode('editing') }
   function cancelEdit() { setInputVal(audio.etiqueta ?? ''); setApiError(null); setMode('idle') }
@@ -826,7 +829,10 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
                   <label htmlFor={inputId} className="sr-only">Etiqueta para {audio.nombre}</label>
                   <input
                     id={inputId}
+                    ref={inputRef}
                     type="text"
+                    lang="es"
+                    spellCheck={false}
                     value={inputVal}
                     onChange={e => setInputVal(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter' && !isBusy && inputVal.trim()) handleSave() }}
@@ -853,6 +859,22 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
                     )}
                   </div>
                 </div>
+
+                <div className="eg-kb-row">
+                  <SpecialKeyboardToggle open={kb.open} onToggle={() => kb.open ? kb.setOpen(false) : kb.openKeyboard()} />
+                </div>
+                <SpecialKeyboardPanel
+                  open={kb.open}
+                  onClose={() => kb.setOpen(false)}
+                  onInsert={kb.insertAtCursor}
+                  onDelete={kb.deleteChar}
+                  onSpace={() => kb.insertAtCursor(' ')}
+                  onAccent={kb.acentuar}
+                  aviso={kb.aviso}
+                  valor={inputVal}
+                  onReplace={setInputVal}
+                  lengua={community.toLowerCase() === 'kogui' ? 'kogui' : community.toLowerCase() === 'arhuaco' ? 'arhuaco' : undefined}
+                />
 
                 {/* Glossary panel — always visible when in edit mode */}
                 {glossaryCategories.length > 0 && (
@@ -1002,7 +1024,7 @@ function SessionWorkspace({ community, session, onBack, canEtiquetar }: {
 
           {/* HU-21: progress bar */}
           <div className="eg-ws-progress" aria-label={`${labeled} de ${total} etiquetados`}>
-            <div className="eg-ws-progress-bar" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+            <div className="eg-ws-progress-bar" role="progressbar" aria-label={`Avance de etiquetado: ${labeled} de ${total}`} aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
               <div className="eg-ws-progress-fill" style={{ width: `${pct}%` }} />
             </div>
             <span className="eg-ws-progress-text">
@@ -1030,9 +1052,9 @@ function SessionWorkspace({ community, session, onBack, canEtiquetar }: {
         {!loading && !error && (
           <section className="eg-section" aria-label="Lista de audios de la jornada">
             <div className="eg-section-header">
-              <h2 className="eg-section-title">
+              <h1 className="eg-section-title">
                 <Music size={18} aria-hidden="true" /> Audios · {session}
-              </h2>
+              </h1>
               <div className="eg-section-header-right">
                 {termCount > 0 && (
                   <span className="eg-glos-info">
