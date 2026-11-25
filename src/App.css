@@ -3694,3 +3694,13 @@ a.contact-card .contact-card-icon { background: var(--blue); color: var(--white)
 @media (prefers-reduced-motion: reduce) { .vk-inline { animation: none; } .vk-char-btn, .vk-action-btn { transition: none; } }
 
 .vk-inline-body { max-height: min(48vh, 440px); overflow-y: auto; }
+
+/* ── Traductor: confianza y avisos ───────────────────────────────────────── */
+.tc-score-pct small { font-size: 0.7em; opacity: .7; margin-left: 1px; }
+.tc-score-nivel { display: block; font-size: 11px; color: var(--gray-500); margin-top: 2px; white-space: nowrap; }
+.trx-aviso {
+  display: flex; align-items: flex-start; gap: 6px; margin: 8px 0 0; padding: 8px 10px; border-radius: 8px;
+  font-size: 13px; line-height: 1.35; color: #7a4b00; background: #fff6e0; border: 1px solid #f3d58a;
+}
+.trx-aviso--fuera { color: #8a1c1c; background: #fdecec; border-color: #f0b4b4; }
+.trx-aviso svg { flex: 0 0 auto; margin-top: 2px; }

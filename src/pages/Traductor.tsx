@@ -3,7 +3,7 @@ import {
   Mic, MicOff, Upload, Languages,
   Loader2, Volume2, Copy, Check, AlertCircle,
   ArrowRightLeft, Star, XCircle, ChevronDown, Sparkles, Type,
-  Keyboard, X,
+  Keyboard, X, AlertTriangle,
 } from 'lucide-react'
 import {
   useSpecialKeyboard, SpecialKeyboardPanel, SpecialKeyboardToggle,
@@ -24,6 +24,11 @@ interface ResultadoItem {
   definicion: string
   score: number
   probabilidad: number
+  confianza?: number
+  nivel?: string
+  fuente?: string
+  nota?: string
+  hipotesis?: boolean
   mejor_coincidencia: boolean
   coincidencia: string
 }
@@ -40,9 +45,11 @@ interface TraduccionResponse {
     probabilidad: number
   }
   resultados: ResultadoItem[]
+  en_glosario?: boolean
+  aviso?: string | null
 }
 
-interface TranscripcionResultado { termino: string; termino_es: string; definicion: string; probabilidad: number; mejor_coincidencia: boolean }
+interface TranscripcionResultado { termino: string; termino_es: string; definicion: string; probabilidad: number; confianza?: number; nivel?: string; fuente?: string; nota?: string; hipotesis?: boolean; mejor_coincidencia: boolean }
 interface TranscripcionResponse {
   transcripcion?: string
   modelo?: string
@@ -52,6 +59,8 @@ interface TranscripcionResponse {
     conclusion?: { termino: string; termino_es: string; definicion: string; probabilidad: number }
     resultados?: TranscripcionResultado[]
     advertencia?: string
+    en_glosario?: boolean
+    aviso?: string | null
   }
 }
 
@@ -60,12 +69,23 @@ type InputMode = 'text' | 'audio'
 
 // ── Probability badge ─────────────────────────────────────────────────────────
 
-function ProbBadge({ prob }: { prob: number }) {
-  const cls = prob >= 50 ? 'tc-score--high' : prob >= 25 ? 'tc-score--mid' : 'tc-score--low'
+const NIVEL_TXT: Record<string, string> = {
+  exacta: 'Coincidencia exacta', aproximada: 'Coincidencia aproximada', parcial: 'Coincidencia parcial',
+  alta: 'Confianza alta', media: 'Confianza media', baja: 'Confianza baja',
+}
+const FUENTE_TXT: Record<string, string> = { glosario: 'glosario', 'patrón': 'patrón de la lengua', 'semántica': 'búsqueda semántica' }
+
+function ProbBadge({ item }: { item: { probabilidad: number; confianza?: number; nivel?: string; fuente?: string; hipotesis?: boolean } }) {
+  const conf = item.confianza ?? item.probabilidad
+  const cls = conf >= 70 ? 'tc-score--high' : conf >= 45 ? 'tc-score--mid' : 'tc-score--low'
+  const nivel = item.nivel ? NIVEL_TXT[item.nivel] ?? item.nivel : undefined
+  const fuente = item.fuente ? FUENTE_TXT[item.fuente] ?? item.fuente : undefined
+  const titulo = [nivel, fuente && `vía ${fuente}`, item.hipotesis && 'hipótesis sin validar'].filter(Boolean).join(' · ')
   return (
-    <div className={`tc-score-wrap ${cls}`}>
-      <span className="tc-score-pct">{prob.toFixed(1)}%</span>
-      <div className="tc-score-bar"><div className="tc-score-fill" style={{ width: `${prob}%` }} /></div>
+    <div className={`tc-score-wrap ${cls}`} title={titulo} aria-label={`${titulo}: ${Math.round(conf)} de 100`}>
+      <span className="tc-score-pct">{Math.round(conf)}<small>/100</small></span>
+      <div className="tc-score-bar"><div className="tc-score-fill" style={{ width: `${conf}%` }} /></div>
+      {nivel && <span className="tc-score-nivel">{nivel}{item.hipotesis ? ' · hipótesis' : ''}</span>}
     </div>
   )
 }
@@ -162,13 +182,15 @@ export default function Traductor() {
           setTranscripcion(data.transcripcion ?? null)
           if (data.traduccion?.resultados && data.traduccion.conclusion) {
             setResult({
+              en_glosario: data.traduccion.en_glosario,
+              aviso: data.traduccion.aviso ?? null,
               texto_entrada: data.transcripcion ?? '',
               lengua: selectedLengua as Lengua as TraduccionResponse['lengua'],
               embedding: { version_id: '', version: data.modelo ?? '', modelo: data.modelo ?? '', num_terminos: 0 },
               direccion: 'lengua_a_es',
               conclusion: data.traduccion.conclusion,
               resultados: data.traduccion.resultados.map(r => ({
-                ...r, score: r.probabilidad, coincidencia: '',
+                ...r, score: (r.confianza ?? r.probabilidad) / 100, coincidencia: '',
               })),
             })
             const best = data.traduccion.resultados.findIndex(r => r.mejor_coincidencia)
@@ -187,7 +209,7 @@ export default function Traductor() {
 
   const handleCopy = async () => {
     if (!selected) return
-    const text = `${selected.termino} (${selected.termino_es}) — ${selected.definicion} · ${selected.probabilidad.toFixed(1)}%`
+    const text = `${selected.termino} (${selected.termino_es}) — ${selected.definicion} · confianza ${Math.round(selected.confianza ?? selected.probabilidad)}/100`
     await navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
@@ -425,6 +447,11 @@ export default function Traductor() {
                 )}
               </div>
 
+              {result && !isLoading && result.aviso && (
+                <p className={`trx-aviso ${result.en_glosario === false ? 'trx-aviso--fuera' : ''}`} role="status">
+                  <AlertTriangle size={14} aria-hidden="true" /> {result.aviso}
+                </p>
+              )}
               {selected && !isLoading && (
                 <div className="trx-panel-foot trx-panel-foot--target">
                   <span className={`trx-badge-flag ${selectedIdx === bestIdx ? 'is-best' : ''}`}>
@@ -432,7 +459,7 @@ export default function Traductor() {
                     {selectedIdx === bestIdx ? 'Mejor coincidencia' : 'Opción elegida'}
                   </span>
                   <div className="trx-foot-right">
-                    <ProbBadge prob={selected.probabilidad} />
+                    <ProbBadge item={selected} />
                     <button type="button" className="trx-icon-btn trx-icon-btn--bordered" onClick={handleCopy}
                       aria-label={copied ? 'Copiado' : 'Copiar traducción'}>
                       {copied ? <Check size={16} /> : <Copy size={16} />}
@@ -533,7 +560,7 @@ export default function Traductor() {
                     <span className="tc-result-es">{r.termino_es}</span>
                     <span className="tc-result-def">{r.definicion}</span>
                   </div>
-                  <ProbBadge prob={r.probabilidad} />
+                  <ProbBadge item={r} />
                 </button>
               ))}
             </div>
