@@ -3776,3 +3776,7 @@ a.contact-card .contact-card-icon { background: var(--blue); color: var(--white)
 .eg-sug-chip { background: #fff; border: 1px solid #b7d7f4; border-radius: 999px; padding: 5px 10px; font-size: 13px; cursor: pointer; color: var(--gray-900, #0f172a); }
 .eg-sug-chip.is-elegida { border-color: var(--teal-dark); font-weight: 600; }
 .eg-sug-chip:hover { background: #e0f4f7; }
+
+.trx-escuchar { display: inline-flex; align-items: center; gap: 4px; margin-left: 10px; vertical-align: middle; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--teal-dark); background: #fff; color: var(--teal-dark); cursor: pointer; }
+.trx-escuchar:hover { background: #e0f4f7; } .trx-escuchar.error { border-color: #f0b4b4; color: #b91c1c; }
+.tc-result-audio { margin-left: 6px; font-size: 12px; }

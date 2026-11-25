@@ -9,7 +9,7 @@ import {
   useSpecialKeyboard, SpecialKeyboardPanel, SpecialKeyboardToggle,
 } from '../components/SpecialKeyboard'
 import { useAudioRecorder } from '../hooks/useAudioRecorder'
-import { apiErr, apiFetch } from '../api'
+import { API_BASE, apiErr, apiFetch, getAuthHeaders } from '../api'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -30,6 +30,7 @@ interface ResultadoItem {
   nota?: string
   hipotesis?: boolean
   verificado?: boolean
+  audio_ejemplo?: boolean
   mejor_coincidencia: boolean
   coincidencia: string
 }
@@ -102,6 +103,30 @@ const VERIF_TXT: Record<Verificacion['estado'], { titulo: string; tono: 'ok' | '
   no_concluyente: { titulo: 'Verificación no concluyente', tono: 'warn' },
   no_disponible: { titulo: 'Verificador no disponible: resultado sin verificar', tono: 'off' },
   omitida: { titulo: 'Verificación desactivada', tono: 'off' },
+}
+
+function EscucharEjemplo({ termino, lengua }: { termino: string; lengua: string }) {
+  const [estado, setEstado] = useState<'idle' | 'cargando' | 'error'>('idle')
+  const reproducir = async () => {
+    setEstado('cargando')
+    try {
+      const url = `${API_BASE}/traduccion/audio-ejemplo/?archivo=1&lengua=${encodeURIComponent(lengua)}&texto=${encodeURIComponent(termino)}`
+      const res = await fetch(url, { headers: getAuthHeaders() })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const blob = await res.blob()
+      const a = new Audio(URL.createObjectURL(blob))
+      a.onended = () => setEstado('idle')
+      await a.play()
+      setEstado('idle')
+    } catch { setEstado('error'); setTimeout(() => setEstado('idle'), 2500) }
+  }
+  return (
+    <button type="button" className={`trx-escuchar ${estado}`} onClick={reproducir} disabled={estado === 'cargando'}
+      aria-label={`Escuchar grabación real de «${termino}»`} title="Así suena: grabación real de la comunidad con esta transcripción">
+      {estado === 'cargando' ? <Loader2 size={14} className="spin" aria-hidden="true" /> : <Volume2 size={14} aria-hidden="true" />}
+      <span>{estado === 'error' ? 'No disponible' : 'Escuchar'}</span>
+    </button>
+  )
 }
 
 function Troceado({ texto, piezas, sinTraducir }: { texto: string; piezas: Verificacion['piezas']; sinTraducir: string[] }) {
@@ -548,7 +573,7 @@ export default function Traductor() {
                   </div>
                 ) : selected ? (
                   <>
-                    <p className="trx-target-term">{targetPrimary}</p>
+                    <p className="trx-target-term">{targetPrimary}{selected.audio_ejemplo && result && <EscucharEjemplo termino={selected.termino} lengua={result.lengua.codigo} />}</p>
                     {targetSecondary && <p className="trx-target-es">{targetSecondary}</p>}
                     {selected.definicion && <p className="trx-target-def">{selected.definicion}</p>}
                   </>
@@ -675,6 +700,7 @@ export default function Traductor() {
                         <span className="tc-result-best-tag" aria-label="Mejor coincidencia">★</span>
                       )}
                       {r.verificado && <span className="tc-result-verif" title="Elegida por el verificador">✓ verificada</span>}
+                      {r.audio_ejemplo && <span className="tc-result-audio" title="Hay grabación real">🔊</span>}
                     </span>
                     <span className="tc-result-es">{r.termino_es}</span>
                     <span className="tc-result-def">{r.definicion}</span>
