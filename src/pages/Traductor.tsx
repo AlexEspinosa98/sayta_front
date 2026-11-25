@@ -49,6 +49,7 @@ interface TraduccionResponse {
   en_glosario?: boolean
   aviso?: string | null
   verificacion?: Verificacion | null
+  consulta_id?: string | null
 }
 
 interface Verificacion {
@@ -60,7 +61,7 @@ interface Verificacion {
   sin_traducir: string[]
   modelo: string | null
   ms: number
-  piezas: { fragmento: string; equivalente: string }[]
+  piezas: { fragmento: string; equivalente: string; inicio?: number; fin?: number }[]
 }
 
 interface TranscripcionResultado { termino: string; termino_es: string; definicion: string; probabilidad: number; confianza?: number; nivel?: string; fuente?: string; nota?: string; hipotesis?: boolean; mejor_coincidencia: boolean }
@@ -76,6 +77,7 @@ interface TranscripcionResponse {
     en_glosario?: boolean
     aviso?: string | null
     verificacion?: Verificacion | null
+    consulta_id?: string | null
   }
 }
 
@@ -100,7 +102,37 @@ const VERIF_TXT: Record<Verificacion['estado'], { titulo: string; tono: 'ok' | '
   omitida: { titulo: 'Verificación desactivada', tono: 'off' },
 }
 
-function VerificacionPanel({ v }: { v: Verificacion }) {
+function Troceado({ texto, piezas, sinTraducir }: { texto: string; piezas: Verificacion['piezas']; sinTraducir: string[] }) {
+  const tokens = texto.trim().split(/\s+/)
+  const cubierto = new Map<number, { equivalente: string; primero: boolean }>()
+  piezas.forEach(p => {
+    if (p.inicio == null || p.fin == null) return
+    for (let i = p.inicio; i < p.fin; i++) cubierto.set(i, { equivalente: p.equivalente, primero: i === p.inicio })
+  })
+  const conPos = piezas.some(p => p.inicio != null)
+  return (
+    <div className="trx-troceado" aria-label="Texto por partes">
+      <p className="trx-troceado-title">Texto por partes <span>verde = está en el glosario · gris = sin traducir</span></p>
+      {conPos ? (
+        <div className="trx-troceado-row">
+          {tokens.map((t, i) => {
+            const c = cubierto.get(i)
+            return (
+              <span key={i} className={`trx-trozo ${c ? 'trx-trozo--ok' : 'trx-trozo--no'}`} title={c ? c.equivalente : 'sin traducir'}>
+                {t}{c?.primero && <small>{c.equivalente}</small>}
+              </span>
+            )
+          })}
+        </div>
+      ) : (
+        <ul className="trx-troceado-list">{piezas.map((p, i) => <li key={i}><b>{p.fragmento}</b> → {p.equivalente}</li>)}</ul>
+      )}
+      {sinTraducir?.length > 0 && <p className="trx-verif-exp">Sin traducir: {sinTraducir.join(', ')}</p>}
+    </div>
+  )
+}
+
+function VerificacionPanel({ v, texto }: { v: Verificacion; texto: string }) {
   const meta = VERIF_TXT[v.estado] ?? { titulo: v.estado, tono: 'off' as const }
   return (
     <section className={`trx-verif trx-verif--${meta.tono}`} aria-label="Verificación por agente">
@@ -112,9 +144,7 @@ function VerificacionPanel({ v }: { v: Verificacion }) {
       {v.traduccion_final && v.estado === 'compuesta' && <p className="trx-verif-final">{v.traduccion_final}</p>}
       {v.explicacion && <p className="trx-verif-exp">{v.explicacion}</p>}
       {v.sin_traducir?.length > 0 && <p className="trx-verif-exp">Sin traducir: {v.sin_traducir.join(', ')}</p>}
-      {v.piezas?.length > 0 && (
-        <p className="trx-verif-piezas">Piezas del glosario en el texto: {v.piezas.map(p => `«${p.fragmento}» = ${p.equivalente}`).join(' · ')}</p>
-      )}
+      {v.piezas?.length > 0 && <Troceado texto={texto} piezas={v.piezas} sinTraducir={v.sin_traducir} />}
       {v.modelo && <p className="trx-verif-meta">{v.modelo} · {(v.ms / 1000).toFixed(1)} s</p>}
     </section>
   )
@@ -155,6 +185,35 @@ export default function Traductor() {
   const [apiError, setApiError]         = useState('')
   const [isLoading, setIsLoading]       = useState(false)
   const [copied, setCopied]             = useState(false)
+  const [corrOpen, setCorrOpen]         = useState(false)
+  const [corrTexto, setCorrTexto]       = useState('')
+  const [corrComent, setCorrComent]     = useState('')
+  const [corrEstado, setCorrEstado]     = useState<'' | 'enviando' | 'ok' | 'error'>('')
+
+  const elegirOpcion = (i: number) => {
+    setSelectedIdx(i)
+    if (result?.consulta_id) {
+      apiFetch(`/traduccion/consultas/${result.consulta_id}/eleccion/`, { method: 'POST', body: JSON.stringify({ indice: i }) }).catch(() => {})
+    }
+  }
+
+  const enviarCorreccion = async () => {
+    if (!result || !lenguaId || !corrTexto.trim()) return
+    setCorrEstado('enviando')
+    try {
+      const sel = result.resultados[selectedIdx]
+      await apiFetch('/traduccion/correcciones/', {
+        method: 'POST',
+        body: JSON.stringify({
+          tipo: sel?.fuente === 'verificador' ? 'validacion_compuesta' : 'correccion',
+          consulta_id: result.consulta_id ?? null, lengua_id: lenguaId, direccion,
+          texto_origen: result.texto_entrada, propuesta_sistema: sel ? (direccion === 'es_a_lengua' ? sel.termino : sel.termino_es) : '',
+          correccion: corrTexto.trim(), comentario: corrComent.trim(),
+        }),
+      })
+      setCorrEstado('ok'); setCorrTexto(''); setCorrComent('')
+    } catch { setCorrEstado('error') }
+  }
 
   const textareaRef  = useRef<HTMLTextAreaElement>(null)
   const textareaId   = useId()
@@ -200,7 +259,7 @@ export default function Traductor() {
 
   const handleTranslate = async () => {
     if (!canTranslate || !lenguaId) return
-    setIsLoading(true); setResult(null); setTranscripcion(null); setApiError('')
+    setIsLoading(true); setResult(null); setTranscripcion(null); setApiError(''); setCorrOpen(false); setCorrEstado('')
 
     try {
       if (inputMode === 'text') {
@@ -230,6 +289,7 @@ export default function Traductor() {
               en_glosario: data.traduccion.en_glosario,
               aviso: data.traduccion.aviso ?? null,
               verificacion: data.traduccion.verificacion ?? null,
+              consulta_id: data.traduccion.consulta_id ?? null,
               texto_entrada: data.transcripcion ?? '',
               lengua: selectedLengua as Lengua as TraduccionResponse['lengua'],
               embedding: { version_id: '', version: data.modelo ?? '', modelo: data.modelo ?? '', num_terminos: 0 },
@@ -577,7 +637,7 @@ export default function Traductor() {
           </div>
         )}
 
-        {result && !isLoading && result.verificacion && <VerificacionPanel v={result.verificacion} />}
+        {result && !isLoading && result.verificacion && <VerificacionPanel v={result.verificacion} texto={result.texto_entrada} />}
 
         {/* ── Otras coincidencias ─────────────────────────── */}
         {result && !isLoading && result.resultados.length > 1 && (
@@ -595,7 +655,7 @@ export default function Traductor() {
                     selectedIdx === i ? 'tc-result-card--selected' : '',
                     r.mejor_coincidencia ? 'tc-result-card--best' : '',
                   ].join(' ').trim()}
-                  onClick={() => setSelectedIdx(i)}
+                  onClick={() => elegirOpcion(i)}
                 >
                   <span className="tc-result-rank" aria-label={`Opción ${i + 1}`}>#{i + 1}</span>
                   <div className="tc-result-body">
@@ -613,6 +673,31 @@ export default function Traductor() {
                 </button>
               ))}
             </div>
+          </div>
+        )}
+
+        {result && !isLoading && result.resultados.length > 0 && (
+          <div className="trx-corr">
+            {!corrOpen ? (
+              <button type="button" className="trx-corr-btn" onClick={() => setCorrOpen(true)}>
+                <AlertTriangle size={14} aria-hidden="true" /> ¿La traducción está mal? Proponer la correcta
+              </button>
+            ) : (
+              <form className="trx-corr-form" onSubmit={e => { e.preventDefault(); enviarCorreccion() }} aria-label="Proponer corrección">
+                <label>Traducción correcta en {targetLabel}
+                  <input className="gl-input" value={corrTexto} onChange={e => setCorrTexto(e.target.value)} required maxLength={500} />
+                </label>
+                <label>Comentario (opcional)
+                  <input className="gl-input" value={corrComent} onChange={e => setCorrComent(e.target.value)} maxLength={500} placeholder="quién lo confirmó, contexto, variante regional…" />
+                </label>
+                <div className="trx-corr-actions">
+                  <button type="submit" className="gl-btn gl-btn--primary" disabled={corrEstado === 'enviando' || !corrTexto.trim()}>Enviar a revisión</button>
+                  <button type="button" className="gl-btn gl-btn--ghost" onClick={() => setCorrOpen(false)}>Cancelar</button>
+                  {corrEstado === 'ok' && <span className="trx-corr-ok" role="status">Gracias. Quedó pendiente de revisión por el equipo del glosario.</span>}
+                  {corrEstado === 'error' && <span className="trx-corr-err" role="alert">No se pudo enviar. Intenta de nuevo.</span>}
+                </div>
+              </form>
+            )}
           </div>
         )}
 

@@ -3,7 +3,9 @@ import {
   Plus, Edit2, Trash2, RefreshCw, Upload, Search, X,
   Loader2, CheckCircle2, AlertCircle,
   Zap, BookOpen, Globe, Cpu, RotateCcw, FileJson, Download,
+  ClipboardCheck,
 } from 'lucide-react'
+import ValidacionTab from './ValidacionTab'
 import { apiFetch, API_BASE, authHeaders } from '../api'
 import { useAuth } from '../context/AuthContext'
 
@@ -74,7 +76,7 @@ const POS_OPTIONS = [
   { value: 'NOM_MASA', label: 'NOM_MASA — Nombre de masa' },
 ]
 
-type Tab = 'lenguas' | 'terminos' | 'embeddings'
+type Tab = 'lenguas' | 'terminos' | 'embeddings' | 'validacion'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LENGUAS TAB
@@ -992,6 +994,7 @@ export default function Glosario() {
     { id: 'lenguas',    label: 'Lenguas',    icon: <Globe size={15} /> },
     { id: 'terminos',  label: 'Términos',   icon: <BookOpen size={15} /> },
     { id: 'embeddings',label: 'Embeddings', icon: <Cpu size={15} /> },
+    { id: 'validacion', label: 'Validación y uso', icon: <ClipboardCheck size={15} /> },
   ]
 
   return (
@@ -1027,6 +1030,7 @@ export default function Glosario() {
             {activeTab === 'lenguas'    && <LenguasTab canManage={canManageLenguas} />}
             {activeTab === 'terminos'   && <TerminosTab lenguas={lenguas} perms={terminoPerms} />}
             {activeTab === 'embeddings' && <EmbeddingsTab lenguas={lenguas} canManage={canManageEmbeddings} />}
+            {activeTab === 'validacion' && <ValidacionTab canEdit={permissions.glosario.editar} />}
           </>
         )}
       </div>
