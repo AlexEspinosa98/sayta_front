@@ -3766,3 +3766,13 @@ a.contact-card .contact-card-icon { background: var(--blue); color: var(--white)
 .trx-alts-asr ol { margin: 4px 0 0 18px; }
 .trx-alts-asr li.is-elegida { font-weight: 600; color: #14532d; }
 .val-cambios { font-size: 12px; } .val-campo { color: var(--gray-500); } .val-cambios s { color: #b91c1c; }
+
+/* ── Etiquetado: sugerencia del modelo ───────────────────────────────────── */
+.eg-btn--sug { margin-left: 8px; }
+.eg-sug { margin: 8px 0 4px; padding: 8px 10px; border-radius: 10px; background: #f0f7fe; border: 1px solid #b7d7f4; font-size: 13px; }
+.eg-sug--error { background: #fdecec; border-color: #f0b4b4; color: #8a1c1c; }
+.eg-sug-title { display: block; margin-bottom: 6px; color: var(--gray-700, #334155); }
+.eg-sug-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.eg-sug-chip { background: #fff; border: 1px solid #b7d7f4; border-radius: 999px; padding: 5px 10px; font-size: 13px; cursor: pointer; color: var(--gray-900, #0f172a); }
+.eg-sug-chip.is-elegida { border-color: var(--teal-dark); font-weight: 600; }
+.eg-sug-chip:hover { background: #e0f4f7; }

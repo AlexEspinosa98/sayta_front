@@ -4,6 +4,7 @@ import {
   Mic, FolderOpen, BarChart2, RefreshCw, AlertCircle,
   Music, BookOpen, Tag, Check, Trash2, Edit2, X, ArrowLeft,
   ChevronDown, Clock, Eye, History, Users,
+  Sparkles,
 } from 'lucide-react'
 import { API_BASE, TOKEN_KEY, apiErr, apiFetch } from '../api'
 import { useAuth } from '../context/AuthContext'
@@ -698,6 +699,25 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
   const [apiError, setApiError] = useState<string | null>(null)
 
   const audioUrl  = getAudioUrl(community, session, audio.nombre)
+  const [sug, setSug] = useState<{ estado: 'cargando' | 'ok' | 'error'; alternativas: string[]; elegida?: string; reordenada?: boolean; error?: string } | null>(null)
+  const sugerirTranscripcion = async () => {
+    setSug({ estado: 'cargando', alternativas: [] })
+    try {
+      const res = await fetch(audioUrl, { headers: getAuthHeaders() })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const blob = await res.blob()
+      const fd = new FormData()
+      fd.append('lengua_id', String(community.toLowerCase() === 'kogui' ? 2 : 1))
+      fd.append('audio', new File([blob], audio.nombre, { type: blob.type || 'audio/wav' }))
+      const data = await apiFetch('/entrenamiento/transcribir/', { method: 'POST', body: fd }) as { transcripcion?: string; transcripciones_alternativas?: string[]; transcripcion_reordenada?: boolean; error?: string }
+      if (data.error) throw new Error(data.error)
+      const alts = data.transcripciones_alternativas?.length ? data.transcripciones_alternativas : (data.transcripcion ? [data.transcripcion] : [])
+      setSug({ estado: 'ok', alternativas: alts, elegida: data.transcripcion, reordenada: !!data.transcripcion_reordenada })
+      if (data.transcripcion && !inputVal.trim()) setInputVal(data.transcripcion)
+    } catch (e) {
+      setSug({ estado: 'error', alternativas: [], error: apiErr(e, 'No se pudo obtener la sugerencia.') })
+    }
+  }
   const isLabeled = audio.etiquetado
   const isBusy    = mode === 'saving' || mode === 'deleting'
   const inputId   = `lbl-${audio.nombre.replace(/[^a-z0-9]/gi, '-')}`
@@ -862,7 +882,25 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
 
                 <div className="eg-kb-row">
                   <SpecialKeyboardToggle open={kb.open} onToggle={() => kb.open ? kb.setOpen(false) : kb.openKeyboard()} />
+                  <button type="button" className="eg-btn eg-btn--ghost eg-btn--sug" onClick={sugerirTranscripcion} disabled={isBusy || sug?.estado === 'cargando'}
+                    title="El modelo de reconocimiento de voz propone una transcripción; revísala y corrígela antes de guardar">
+                    {sug?.estado === 'cargando' ? <><RefreshCw size={14} className="spin" aria-hidden="true" /> Escuchando…</> : <><Sparkles size={14} aria-hidden="true" /> Sugerir con el modelo</>}
+                  </button>
                 </div>
+                {sug && sug.estado !== 'cargando' && (
+                  <div className={`eg-sug ${sug.estado === 'error' ? 'eg-sug--error' : ''}`} role="status">
+                    {sug.estado === 'error' ? sug.error : (
+                      <>
+                        <span className="eg-sug-title">Propuestas del modelo{sug.reordenada ? ' (el glosario reordenó la primera)' : ''}: toca una para usarla y corrígela si hace falta.</span>
+                        <div className="eg-sug-chips">
+                          {sug.alternativas.map((a, i) => (
+                            <button key={i} type="button" className={`eg-sug-chip ${a === sug.elegida ? 'is-elegida' : ''}`} onClick={() => { setInputVal(a); inputRef.current?.focus() }}>{a}</button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
                 <SpecialKeyboardPanel
                   open={kb.open}
                   onClose={() => kb.setOpen(false)}
