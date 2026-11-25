@@ -29,6 +29,7 @@ interface ResultadoItem {
   fuente?: string
   nota?: string
   hipotesis?: boolean
+  verificado?: boolean
   mejor_coincidencia: boolean
   coincidencia: string
 }
@@ -47,6 +48,19 @@ interface TraduccionResponse {
   resultados: ResultadoItem[]
   en_glosario?: boolean
   aviso?: string | null
+  verificacion?: Verificacion | null
+}
+
+interface Verificacion {
+  estado: 'confirmada' | 'ajustada' | 'compuesta' | 'sin_coincidencia' | 'rechazada' | 'no_concluyente' | 'no_disponible' | 'omitida'
+  eleccion: number | null
+  traduccion_final: string | null
+  explicacion: string
+  confianza: number | null
+  sin_traducir: string[]
+  modelo: string | null
+  ms: number
+  piezas: { fragmento: string; equivalente: string }[]
 }
 
 interface TranscripcionResultado { termino: string; termino_es: string; definicion: string; probabilidad: number; confianza?: number; nivel?: string; fuente?: string; nota?: string; hipotesis?: boolean; mejor_coincidencia: boolean }
@@ -61,6 +75,7 @@ interface TranscripcionResponse {
     advertencia?: string
     en_glosario?: boolean
     aviso?: string | null
+    verificacion?: Verificacion | null
   }
 }
 
@@ -73,7 +88,37 @@ const NIVEL_TXT: Record<string, string> = {
   exacta: 'Coincidencia exacta', aproximada: 'Coincidencia aproximada', parcial: 'Coincidencia parcial',
   alta: 'Confianza alta', media: 'Confianza media', baja: 'Confianza baja',
 }
-const FUENTE_TXT: Record<string, string> = { glosario: 'glosario', 'patrón': 'patrón de la lengua', 'semántica': 'búsqueda semántica' }
+const FUENTE_TXT: Record<string, string> = { glosario: 'glosario', 'patrón': 'patrón de la lengua', 'semántica': 'búsqueda semántica', verificador: 'compuesta por el verificador' }
+const VERIF_TXT: Record<Verificacion['estado'], { titulo: string; tono: 'ok' | 'info' | 'warn' | 'off' }> = {
+  confirmada: { titulo: 'El verificador confirma la mejor opción', tono: 'ok' },
+  ajustada: { titulo: 'El verificador eligió otra opción más adecuada', tono: 'info' },
+  compuesta: { titulo: 'Traducción compuesta a partir de piezas del glosario', tono: 'info' },
+  sin_coincidencia: { titulo: 'El verificador no encontró una traducción válida', tono: 'warn' },
+  rechazada: { titulo: 'El verificador propuso algo fuera del glosario y se descartó', tono: 'warn' },
+  no_concluyente: { titulo: 'Verificación no concluyente', tono: 'warn' },
+  no_disponible: { titulo: 'Verificador no disponible: resultado sin verificar', tono: 'off' },
+  omitida: { titulo: 'Verificación desactivada', tono: 'off' },
+}
+
+function VerificacionPanel({ v }: { v: Verificacion }) {
+  const meta = VERIF_TXT[v.estado] ?? { titulo: v.estado, tono: 'off' as const }
+  return (
+    <section className={`trx-verif trx-verif--${meta.tono}`} aria-label="Verificación por agente">
+      <div className="trx-verif-head">
+        <span className="trx-verif-chip"><Sparkles size={12} aria-hidden="true" /> Agente verificador</span>
+        <strong>{meta.titulo}</strong>
+        {v.confianza != null && <span className="trx-verif-conf">confianza {v.confianza}/100</span>}
+      </div>
+      {v.traduccion_final && v.estado === 'compuesta' && <p className="trx-verif-final">{v.traduccion_final}</p>}
+      {v.explicacion && <p className="trx-verif-exp">{v.explicacion}</p>}
+      {v.sin_traducir?.length > 0 && <p className="trx-verif-exp">Sin traducir: {v.sin_traducir.join(', ')}</p>}
+      {v.piezas?.length > 0 && (
+        <p className="trx-verif-piezas">Piezas del glosario en el texto: {v.piezas.map(p => `«${p.fragmento}» = ${p.equivalente}`).join(' · ')}</p>
+      )}
+      {v.modelo && <p className="trx-verif-meta">{v.modelo} · {(v.ms / 1000).toFixed(1)} s</p>}
+    </section>
+  )
+}
 
 function ProbBadge({ item }: { item: { probabilidad: number; confianza?: number; nivel?: string; fuente?: string; hipotesis?: boolean } }) {
   const conf = item.confianza ?? item.probabilidad
@@ -184,6 +229,7 @@ export default function Traductor() {
             setResult({
               en_glosario: data.traduccion.en_glosario,
               aviso: data.traduccion.aviso ?? null,
+              verificacion: data.traduccion.verificacion ?? null,
               texto_entrada: data.transcripcion ?? '',
               lengua: selectedLengua as Lengua as TraduccionResponse['lengua'],
               embedding: { version_id: '', version: data.modelo ?? '', modelo: data.modelo ?? '', num_terminos: 0 },
@@ -434,7 +480,7 @@ export default function Traductor() {
                 {isLoading ? (
                   <div className="trx-target-loading">
                     <Loader2 size={22} className="spin" aria-hidden="true" />
-                    <span>{inputMode === 'audio' ? 'Transcribiendo audio…' : 'Buscando términos similares…'}</span>
+                    <span>{inputMode === 'audio' ? 'Transcribiendo audio…' : 'Buscando en el glosario y verificando…'}</span>
                   </div>
                 ) : selected ? (
                   <>
@@ -531,6 +577,8 @@ export default function Traductor() {
           </div>
         )}
 
+        {result && !isLoading && result.verificacion && <VerificacionPanel v={result.verificacion} />}
+
         {/* ── Otras coincidencias ─────────────────────────── */}
         {result && !isLoading && result.resultados.length > 1 && (
           <div className="trx-alts" role="status" aria-label="Otras coincidencias">
@@ -556,6 +604,7 @@ export default function Traductor() {
                       {r.mejor_coincidencia && (
                         <span className="tc-result-best-tag" aria-label="Mejor coincidencia">★</span>
                       )}
+                      {r.verificado && <span className="tc-result-verif" title="Elegida por el verificador">✓ verificada</span>}
                     </span>
                     <span className="tc-result-es">{r.termino_es}</span>
                     <span className="tc-result-def">{r.definicion}</span>
