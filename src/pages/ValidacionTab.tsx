@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Check, X, Loader2, RefreshCw, AlertTriangle, MessageSquareWarning, FlaskConical, BarChart3 } from 'lucide-react'
+import { Check, X, Loader2, RefreshCw, AlertTriangle, MessageSquareWarning, FlaskConical, BarChart3, History } from 'lucide-react'
 import { apiErr, apiFetch } from '../api'
 
 interface Correccion {
@@ -10,6 +10,7 @@ interface Correccion {
   es_correcta: boolean | null; comentario: string; usuario: string; creado_en: string
 }
 interface Hipotesis { id: number; lengua: string; termino: string; termino_es: string; definicion: string; pos: string; con_validacion_pendiente: boolean }
+interface CambioGlosario { id: number; termino_id: number | null; termino: string; lengua: string; accion: string; cambios: Record<string, { antes: unknown; despues: unknown }>; usuario: string; origen: string; creado_en: string }
 interface Estadisticas {
   dias: number; total_consultas: number; pct_en_glosario: number | null; pct_usuario_cambio_opcion: number | null
   por_lengua_direccion: { lengua__codigo: string; lengua__nombre: string; direccion: string; n: number; en_glosario: number }[]
@@ -27,6 +28,7 @@ export default function ValidacionTab({ canEdit }: { canEdit: boolean }) {
   const [stats, setStats] = useState<Estadisticas | null>(null)
   const [pend, setPend] = useState<Correccion[]>([])
   const [hip, setHip] = useState<Hipotesis[]>([])
+  const [cambios, setCambios] = useState<CambioGlosario[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
@@ -37,11 +39,13 @@ export default function ValidacionTab({ canEdit }: { canEdit: boolean }) {
   const load = useCallback(async () => {
     setLoading(true); setError('')
     try {
-      const [s, c, h] = await Promise.all([
+      const [s, c, h, g] = await Promise.all([
         apiFetch('/traduccion/estadisticas/?dias=30'),
         apiFetch('/traduccion/correcciones/?veredicto=pendiente&limite=200'),
         apiFetch('/traduccion/pendientes-validacion/'),
+        apiFetch('/traduccion/historial-glosario/?limite=60').catch(() => ({ resultados: [] })),
       ])
+      setCambios((g as { resultados: CambioGlosario[] }).resultados ?? [])
       setStats(s as Estadisticas)
       setPend((c as { resultados: Correccion[] }).resultados)
       setHip((h as { hipotesis: Hipotesis[] }).hipotesis)
@@ -177,6 +181,25 @@ export default function ValidacionTab({ canEdit }: { canEdit: boolean }) {
                   <button className="gl-btn gl-btn--primary gl-btn--sm" disabled={busy === String(h.id)} onClick={() => validarHipotesis(h, true)} title="Correcta"><Check size={14} /></button>
                   <button className="gl-btn gl-btn--ghost gl-btn--sm" disabled={busy === String(h.id)} onClick={() => validarHipotesis(h, false)} title="Incorrecta"><X size={14} /></button>
                 </td>
+              </tr>
+            ))}</tbody>
+          </table>
+        )}
+      </section>
+      <section className="gl-card val-sec" aria-labelledby="val-hist">
+        <h2 id="val-hist"><History size={18} aria-hidden="true" /> Últimos cambios del glosario</h2>
+        {cambios.length === 0 ? <p className="gl-help">Aún no hay cambios registrados (el historial empieza a contar desde el 25/11/2026).</p> : (
+          <table className="gl-table val-table">
+            <thead><tr><th>Fecha</th><th>Quién</th><th>Acción</th><th>Término</th><th>Cambios</th></tr></thead>
+            <tbody>{cambios.map(c => (
+              <tr key={c.id}>
+                <td>{new Date(c.creado_en).toLocaleString('es-CO')}</td>
+                <td>{c.usuario}{c.origen && c.origen !== 'api' ? ` (${c.origen})` : ''}</td>
+                <td><span className="gl-badge gl-badge--soft">{c.accion}</span></td>
+                <td><b>{c.termino}</b> <small>{LENGUA_NOMBRE[c.lengua] ?? c.lengua}</small></td>
+                <td className="val-cambios">{Object.entries(c.cambios).filter(([k]) => k !== 'termino_es_id').map(([k, v]) => (
+                  <div key={k}><span className="val-campo">{k}:</span> {c.accion === 'crear' ? String(v.despues ?? '') : <><s>{String(v.antes ?? '—')}</s> → {String(v.despues ?? '—')}</>}</div>
+                ))}</td>
               </tr>
             ))}</tbody>
           </table>

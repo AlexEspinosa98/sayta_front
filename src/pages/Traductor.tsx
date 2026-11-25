@@ -67,6 +67,8 @@ interface Verificacion {
 interface TranscripcionResultado { termino: string; termino_es: string; definicion: string; probabilidad: number; confianza?: number; nivel?: string; fuente?: string; nota?: string; hipotesis?: boolean; mejor_coincidencia: boolean }
 interface TranscripcionResponse {
   transcripcion?: string
+  transcripciones_alternativas?: string[]
+  transcripcion_reordenada?: boolean
   modelo?: string
   lengua?: string
   error?: string
@@ -181,6 +183,7 @@ export default function Traductor() {
 
   const [result, setResult]             = useState<TraduccionResponse | null>(null)
   const [transcripcion, setTranscripcion] = useState<string | null>(null)
+  const [altsAsr, setAltsAsr] = useState<{ lista: string[]; reordenada: boolean } | null>(null)
   const [selectedIdx, setSelectedIdx]   = useState<number>(0)
   const [apiError, setApiError]         = useState('')
   const [isLoading, setIsLoading]       = useState(false)
@@ -232,7 +235,7 @@ export default function Traductor() {
       .finally(() => setLoadingL(false))
   }, [])
 
-  const resetResults = () => { setResult(null); setTranscripcion(null); setApiError('') }
+  const resetResults = () => { setResult(null); setTranscripcion(null); setAltsAsr(null); setApiError('') }
 
   const handleSetInputMode = (mode: InputMode) => {
     setInputMode(mode)
@@ -284,6 +287,7 @@ export default function Traductor() {
           setApiError(data.error)
         } else {
           setTranscripcion(data.transcripcion ?? null)
+          setAltsAsr(data.transcripciones_alternativas && data.transcripciones_alternativas.length > 1 ? { lista: data.transcripciones_alternativas, reordenada: !!data.transcripcion_reordenada } : null)
           if (data.traduccion?.resultados && data.traduccion.conclusion) {
             setResult({
               en_glosario: data.traduccion.en_glosario,
@@ -634,6 +638,12 @@ export default function Traductor() {
           <div className="trx-transcripcion" role="status">
             <span className="trx-transcripcion-label"><Mic size={13} aria-hidden="true" /> Transcripción</span>
             <span className="trx-transcripcion-text">{transcripcion}</span>
+            {altsAsr && (
+              <details className="trx-alts-asr">
+                <summary>{altsAsr.reordenada ? 'El glosario eligió otra transcripción que la más probable del reconocedor' : 'Otras transcripciones posibles'} ({altsAsr.lista.length})</summary>
+                <ol>{altsAsr.lista.map((a, i) => <li key={i} className={a === transcripcion ? 'is-elegida' : ''}>{a}{a === transcripcion ? ' ✓' : ''}</li>)}</ol>
+              </details>
+            )}
           </div>
         )}
 

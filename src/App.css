@@ -3760,3 +3760,9 @@ a.contact-card .contact-card-icon { background: var(--blue); color: var(--white)
 .val-msg { background: #e0f4f7; color: var(--teal-dark); border-radius: 8px; padding: 8px 12px; font-size: 13.5px; margin: 0; }
 .gl-btn--sm { padding: 4px 8px; }
 @media (max-width: 640px) { .val-edit { grid-template-columns: 1fr; } .val-dl { grid-template-columns: 1fr; } }
+
+.trx-alts-asr { margin-top: 6px; font-size: 12.5px; color: var(--gray-600, #475569); }
+.trx-alts-asr summary { cursor: pointer; }
+.trx-alts-asr ol { margin: 4px 0 0 18px; }
+.trx-alts-asr li.is-elegida { font-weight: 600; color: #14532d; }
+.val-cambios { font-size: 12px; } .val-campo { color: var(--gray-500); } .val-cambios s { color: #b91c1c; }
