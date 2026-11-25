@@ -9,7 +9,7 @@ import {
   useSpecialKeyboard, SpecialKeyboardPanel, SpecialKeyboardToggle,
 } from '../components/SpecialKeyboard'
 import { useAudioRecorder } from '../hooks/useAudioRecorder'
-import { API_BASE, apiErr, apiFetch, getAuthHeaders } from '../api'
+import { API_BASE, apiErr, apiFetch, authHeaders } from '../api'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -111,7 +111,7 @@ function EscucharEjemplo({ termino, lengua }: { termino: string; lengua: string 
     setEstado('cargando')
     try {
       const url = `${API_BASE}/traduccion/audio-ejemplo/?archivo=1&lengua=${encodeURIComponent(lengua)}&texto=${encodeURIComponent(termino)}`
-      const res = await fetch(url, { headers: getAuthHeaders() })
+      const res = await fetch(url, { headers: authHeaders() })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const blob = await res.blob()
       const a = new Audio(URL.createObjectURL(blob))
