@@ -682,7 +682,7 @@ function ActividadModal({ community, session, onClose }: {
    AUDIO ROW  (HU-16 · HU-18 · HU-19 · HU-20)
 ═══════════════════════════════════════════════════════ */
 
-function AudioRow({ audio, community, session, onLabelChange, isExpanded, onToggle, glossaryCategories, canEtiquetar, autoria, onVerHistorial }: {
+function AudioRow({ audio, community, session, onLabelChange, isExpanded, onToggle, glossaryCategories, canEtiquetar, autoria, onVerHistorial, hablante = '', hablantes = [], onHablanteChange }: {
   audio: AudioItem
   community: string
   session: string
@@ -693,12 +693,27 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
   canEtiquetar: boolean
   autoria?: Autoria | null
   onVerHistorial?: (audio: string) => void
+  hablante?: string
+  hablantes?: string[]
+  onHablanteChange?: (audio: string, hablante: string) => void
 }) {
   const [mode, setMode]         = useState<LabelMode>('idle')
   const [inputVal, setInputVal] = useState(audio.etiqueta ?? '')
   const [apiError, setApiError] = useState<string | null>(null)
 
   const audioUrl  = getAudioUrl(community, session, audio.nombre)
+  const [hablanteVal, setHablanteVal] = useState(hablante)
+  const [hablanteEstado, setHablanteEstado] = useState<'' | 'guardando' | 'ok' | 'error'>('')
+  useEffect(() => { setHablanteVal(hablante) }, [hablante])
+  const guardarHablante = async () => {
+    const v = hablanteVal.trim()
+    if (v === (hablante ?? '')) return
+    setHablanteEstado('guardando')
+    try {
+      await apiFetch(getGrabacionesPath(community, session, 'metadato', audio.nombre), { method: 'PUT', body: JSON.stringify({ hablante: v }) })
+      onHablanteChange?.(audio.nombre, v); setHablanteEstado('ok'); setTimeout(() => setHablanteEstado(''), 1500)
+    } catch { setHablanteEstado('error') }
+  }
   const [sug, setSug] = useState<{ estado: 'cargando' | 'ok' | 'error'; alternativas: string[]; elegida?: string; reordenada?: boolean; error?: string } | null>(null)
   const sugerirTranscripcion = async () => {
     setSug({ estado: 'cargando', alternativas: [] })
@@ -880,6 +895,17 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
                   </div>
                 </div>
 
+                {canEtiquetar && (
+                  <div className="eg-hablante-row">
+                    <label htmlFor={`${inputId}-hablante`}>Hablante</label>
+                    <input id={`${inputId}-hablante`} list={`${inputId}-hablantes`} className="eg-gate-input eg-hablante-input" placeholder="p. ej. Mujer 1 · Mamu José · H3"
+                      value={hablanteVal} onChange={e => setHablanteVal(e.target.value)} onBlur={guardarHablante}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); guardarHablante() } }} />
+                    <datalist id={`${inputId}-hablantes`}>{hablantes.map(h => <option key={h} value={h} />)}</datalist>
+                    <span className="eg-hablante-estado" aria-live="polite">{hablanteEstado === 'guardando' ? 'guardando…' : hablanteEstado === 'ok' ? '✓' : hablanteEstado === 'error' ? 'no se guardó' : ''}</span>
+                    <span className="eg-hablante-hint">Sirve para que la misma voz no quede repartida entre entrenamiento y evaluación.</span>
+                  </div>
+                )}
                 <div className="eg-kb-row">
                   <SpecialKeyboardToggle open={kb.open} onToggle={() => kb.open ? kb.setOpen(false) : kb.openKeyboard()} />
                   <button type="button" className="eg-btn eg-btn--ghost eg-btn--sug" onClick={sugerirTranscripcion} disabled={isBusy || sug?.estado === 'cargando'}
@@ -967,9 +993,24 @@ function SessionWorkspace({ community, session, onBack, canEtiquetar }: {
     } catch { /* sin permiso o sin historial: no se muestra */ }
   }, [community, session, isAdmin])
 
+  const [metadatos, setMetadatos] = useState<Record<string, { hablante: string }>>({})
+  const [hablantes, setHablantes] = useState<string[]>([])
+  const actualizarHablante = useCallback((audioNombre: string, hablante: string) => {
+    setMetadatos(m => ({ ...m, [audioNombre]: { ...(m[audioNombre] ?? {}), hablante } }))
+    if (hablante && !hablantes.includes(hablante)) setHablantes(h => [...h, hablante].sort())
+  }, [hablantes])
+
   const fetchData = useCallback(async () => {
     setLoading(true); setError(null)
     try {
+      // Opcional: metadatos (hablante) y lista de hablantes de la comunidad
+      Promise.all([
+        apiFetch(getGrabacionesPath(community, session, 'metadatos')).catch(() => null),
+        apiFetch(`/grabaciones/${encodeURIComponent(community)}/hablantes/`).catch(() => null),
+      ]).then(([md, hb]) => {
+        if (md) setMetadatos(((md as { metadatos?: Record<string, { hablante: string }> }).metadatos) ?? {})
+        if (hb) setHablantes(((hb as { hablantes?: { hablante: string }[] }).hablantes ?? []).map(x => x.hablante))
+      })
       // Required: audio list
       const audiosData = await apiFetch(getGrabacionesPath(community, session, 'audios'))
 
@@ -1113,6 +1154,9 @@ function SessionWorkspace({ community, session, onBack, canEtiquetar }: {
               <ul className="eg-audio-list" aria-label="Audios de la jornada">
                 {audios.map(a => (
                   <AudioRow
+                    hablante={metadatos[a.nombre]?.hablante ?? ''}
+                    hablantes={hablantes}
+                    onHablanteChange={actualizarHablante}
                     key={a.nombre}
                     audio={a}
                     community={community}

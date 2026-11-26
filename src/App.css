@@ -3780,3 +3780,10 @@ a.contact-card .contact-card-icon { background: var(--blue); color: var(--white)
 .trx-escuchar { display: inline-flex; align-items: center; gap: 4px; margin-left: 10px; vertical-align: middle; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--teal-dark); background: #fff; color: var(--teal-dark); cursor: pointer; }
 .trx-escuchar:hover { background: #e0f4f7; } .trx-escuchar.error { border-color: #f0b4b4; color: #b91c1c; }
 .tc-result-audio { margin-left: 6px; font-size: 12px; }
+
+/* ── Etiquetado: hablante ─────────────────────────────────────────────────── */
+.eg-hablante-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0 2px; font-size: 13px; }
+.eg-hablante-row label { font-weight: 600; color: var(--gray-700, #334155); }
+.eg-hablante-input { max-width: 260px; padding: 6px 10px; }
+.eg-hablante-estado { color: #15803d; font-size: 12px; min-width: 60px; }
+.eg-hablante-hint { flex-basis: 100%; font-size: 11.5px; color: var(--gray-500); }
