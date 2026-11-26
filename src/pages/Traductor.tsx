@@ -203,7 +203,29 @@ export default function Traductor() {
   const [inputText, setInputText]       = useState('')
   const [langMenuOpen, setLangMenuOpen] = useState(false)
 
-  const rec         = useAudioRecorder()
+  const [liveText, setLiveText] = useState('')
+  const liveBusy = useRef(false)
+  const liveLenguaRef = useRef<number | null>(null)
+  const rec         = useAudioRecorder({
+    intervalMs: 2500,
+    maxSeconds: 30,
+    onChunk: async (blob) => {
+      if (liveBusy.current || !liveLenguaRef.current) return
+      liveBusy.current = true
+      try {
+        const fd = new FormData()
+        fd.append('lengua_id', String(liveLenguaRef.current))
+        fd.append('parcial', '1')
+        fd.append('audio', new File([blob], 'parcial.wav', { type: 'audio/wav' }))
+        const d = await apiFetch('/entrenamiento/transcribir/?parcial=1', { method: 'POST', body: fd }) as { transcripcion?: string }
+        if (d.transcripcion) setLiveText(d.transcripcion)
+      } catch { /* parcial fallido: se intenta en el siguiente trozo */ }
+      finally { liveBusy.current = false }
+    },
+  })
+  liveLenguaRef.current = lenguaId
+  const [sugVivo, setSugVivo] = useState<ResultadoItem[]>([])
+  const sugTimer = useRef<number | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [result, setResult]             = useState<TraduccionResponse | null>(null)
@@ -281,13 +303,40 @@ export default function Traductor() {
 
   const selectedLengua = lenguas.find(l => l.id === lenguaId)
 
+  // Sugerencias en vivo mientras se escribe (solo capa léxica: ≈20–60 ms)
+  useEffect(() => {
+    if (inputMode !== 'text' || !lenguaId) { setSugVivo([]); return }
+    const q = inputText.trim()
+    if (q.length < 2 || isLoading) { setSugVivo([]); return }
+    if (sugTimer.current) window.clearTimeout(sugTimer.current)
+    sugTimer.current = window.setTimeout(async () => {
+      try {
+        const d = await apiFetch('/traduccion/traducir/', { method: 'POST', body: JSON.stringify({ texto: q, lengua_id: lenguaId, direccion, rapido: true, verificar: false }) }) as TraduccionResponse
+        setSugVivo((d.resultados ?? []).filter(r => (r.confianza ?? 0) >= 50).slice(0, 5))
+      } catch { setSugVivo([]) }
+    }, 350)
+    return () => { if (sugTimer.current) window.clearTimeout(sugTimer.current) }
+  }, [inputText, inputMode, lenguaId, direccion, isLoading])
+
+  // Al terminar de grabar, transcribir y traducir automáticamente
+  const prevRecording = useRef(false)
+  useEffect(() => {
+    if (prevRecording.current && !rec.isRecording && rec.audioFile && lenguaId) {
+      setLiveText('')
+      void handleTranslate()
+    }
+    prevRecording.current = rec.isRecording
+    if (rec.isRecording) setLiveText('')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rec.isRecording, rec.audioFile])
+
   const canTranslate = lenguaId !== null && (
     inputMode === 'text' ? inputText.trim().length > 0 : rec.audioFile !== null
   )
 
   const handleTranslate = async () => {
     if (!canTranslate || !lenguaId) return
-    setIsLoading(true); setResult(null); setTranscripcion(null); setApiError(''); setCorrOpen(false); setCorrEstado('')
+    setIsLoading(true); setResult(null); setTranscripcion(null); setApiError(''); setCorrOpen(false); setCorrEstado(''); setSugVivo([])
 
     try {
       if (inputMode === 'text') {
@@ -341,6 +390,12 @@ export default function Traductor() {
   }
 
   const selected = result?.resultados[selectedIdx] ?? null
+
+  const usarSugerencia = (r: ResultadoItem) => {
+    setSugVivo([])
+    setInputText(direccion === 'es_a_lengua' ? r.termino_es : r.termino)
+    setTimeout(() => { void handleTranslate() }, 0)
+  }
 
   const handleCopy = async () => {
     if (!selected) return
@@ -491,6 +546,16 @@ export default function Traductor() {
                     aria-describedby={result ? resultId : undefined}
                     onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleTranslate() }}
                   />
+                  {sugVivo.length > 0 && !result && (
+                    <div className="trx-sug-vivo" role="listbox" aria-label="Coincidencias del glosario mientras escribes">
+                      {sugVivo.map((r, i) => (
+                        <button key={i} type="button" role="option" aria-selected={false} className={`trx-sug-chip trx-sug-chip--${r.nivel ?? 'alta'}`} onClick={() => usarSugerencia(r)}
+                          title={NIVEL_TXT[r.nivel ?? ''] ?? r.nivel}>
+                          <b>{sourceIsEs ? r.termino_es : r.termino}</b> → {sourceIsEs ? r.termino : r.termino_es}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <div className="trx-panel-foot">
                     <SpecialKeyboardToggle
                       open={kb.open}
@@ -512,7 +577,8 @@ export default function Traductor() {
                           <span key={i} style={{ height: h, animationDelay: `${(i % 6) * 0.08}s` }} />
                         ))}
                       </div>
-                      <span className="trx-live-label">Escuchando…</span>
+                      <span className="trx-live-label">{liveText ? 'Transcribiendo en vivo…' : 'Escuchando…'}</span>
+                      {liveText && <p className="trx-live-text" aria-live="polite">{liveText}</p>}
                     </div>
                   ) : rec.audioFile && rec.audioUrl ? (
                     <div className="trx-audio-preview">

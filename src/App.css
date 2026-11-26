@@ -3787,3 +3787,11 @@ a.contact-card .contact-card-icon { background: var(--blue); color: var(--white)
 .eg-hablante-input { max-width: 260px; padding: 6px 10px; }
 .eg-hablante-estado { color: #15803d; font-size: 12px; min-width: 60px; }
 .eg-hablante-hint { flex-basis: 100%; font-size: 11.5px; color: var(--gray-500); }
+
+/* ── Traductor: sugerencias en vivo y transcripción en vivo ──────────────── */
+.trx-sug-vivo { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 0; }
+.trx-sug-chip { border: 1px solid #b7d7f4; background: #f0f7fe; color: var(--gray-900, #0f172a); border-radius: 999px; padding: 5px 10px; font-size: 13px; cursor: pointer; text-align: left; }
+.trx-sug-chip:hover { background: #e0f4f7; border-color: var(--teal-dark); }
+.trx-sug-chip--exacta { border-color: #a7e3bd; background: #f0fbf4; }
+.trx-sug-chip--parcial { border-style: dashed; }
+.trx-live-text { margin: 10px 0 0; font-size: 17px; line-height: 1.35; color: var(--gray-900, #0f172a); background: rgba(255,255,255,.75); border-radius: 10px; padding: 8px 12px; max-width: 520px; }

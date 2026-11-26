@@ -21,7 +21,14 @@ export function encodeWav(chunks: Float32Array[], sampleRate: number): Blob {
   return new Blob([buf], { type: 'audio/wav' })
 }
 
-export function useAudioRecorder() {
+export interface RecorderOpts {
+  /** Se llama cada `intervalMs` mientras se graba, con un WAV de los últimos `maxSeconds` segundos. */
+  onChunk?: (blob: Blob) => void
+  intervalMs?: number
+  maxSeconds?: number
+}
+
+export function useAudioRecorder(opts: RecorderOpts = {}) {
   const [audioFile, setAudioFile]     = useState<File | null>(null)
   const [audioUrl, setAudioUrl]       = useState<string | null>(null)
   const [isRecording, setIsRecording] = useState(false)
@@ -31,6 +38,9 @@ export function useAudioRecorder() {
   const processorRef = useRef<ScriptProcessorNode | null>(null)
   const streamRef    = useRef<MediaStream | null>(null)
   const chunksRef    = useRef<Float32Array[]>([])
+  const timerRef     = useRef<number | null>(null)
+  const optsRef      = useRef(opts)
+  optsRef.current = opts
 
   useEffect(() => () => {
     if (urlRef.current) URL.revokeObjectURL(urlRef.current)
@@ -57,6 +67,7 @@ export function useAudioRecorder() {
   }
 
   const stopRecording = () => {
+    if (timerRef.current) { window.clearInterval(timerRef.current); timerRef.current = null }
     processorRef.current?.disconnect(); sourceRef.current?.disconnect()
     streamRef.current?.getTracks().forEach(t => t.stop())
     const sampleRate = ctxRef.current?.sampleRate ?? 44100
@@ -81,6 +92,18 @@ export function useAudioRecorder() {
       ctxRef.current = ctx; sourceRef.current = source
       processorRef.current = proc; streamRef.current = stream
       setIsRecording(true)
+      if (optsRef.current.onChunk) {
+        const every = optsRef.current.intervalMs ?? 2500
+        timerRef.current = window.setInterval(() => {
+          const maxS = optsRef.current.maxSeconds ?? 30
+          const sr = ctx.sampleRate
+          let keep: Float32Array[] = chunksRef.current
+          let total = keep.reduce((a, c) => a + c.length, 0)
+          while (keep.length > 1 && total - keep[0].length >= maxS * sr) { total -= keep[0].length; keep = keep.slice(1) }
+          if (total < sr * 0.8) return
+          optsRef.current.onChunk?.(encodeWav(keep, sr))
+        }, every)
+      }
     } catch { /* micrófono denegado */ }
   }
 
