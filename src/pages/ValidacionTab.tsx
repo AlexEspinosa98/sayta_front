@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Check, X, Loader2, RefreshCw, AlertTriangle, MessageSquareWarning, FlaskConical, BarChart3, History } from 'lucide-react'
+import { Check, X, Loader2, RefreshCw, AlertTriangle, MessageSquareWarning, FlaskConical, BarChart3, History, ListPlus } from 'lucide-react'
 import { apiErr, apiFetch } from '../api'
 
 interface Correccion {
@@ -19,7 +19,10 @@ interface Estadisticas {
   sin_coincidencia_frecuentes: { texto: string; lengua: string; direccion: string; veces: number }[]
   correcciones: { pendiente: number; aprobada: number; rechazada: number }
   hipotesis_sin_validar: number
+  faltantes_pendientes?: number
+  corpus_paralelo?: { total: number; por_comunidad: Record<string, number>; meta: number }
 }
+interface Faltante { id: number; lengua: string; lengua_nombre: string; direccion: string; texto: string; ejemplo_frase: string; veces: number; estado: string; nota: string; ultima_vez: string }
 
 const LENGUA_NOMBRE: Record<string, string> = { '1': 'Ikʉn', Kogui: 'Kogui' }
 const DIR_TXT: Record<string, string> = { es_a_lengua: 'español → lengua', lengua_a_es: 'lengua → español' }
@@ -28,6 +31,7 @@ export default function ValidacionTab({ canEdit }: { canEdit: boolean }) {
   const [stats, setStats] = useState<Estadisticas | null>(null)
   const [pend, setPend] = useState<Correccion[]>([])
   const [hip, setHip] = useState<Hipotesis[]>([])
+  const [falt, setFalt] = useState<Faltante[]>([])
   const [cambios, setCambios] = useState<CambioGlosario[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -49,10 +53,20 @@ export default function ValidacionTab({ canEdit }: { canEdit: boolean }) {
       setStats(s as Estadisticas)
       setPend((c as { resultados: Correccion[] }).resultados)
       setHip((h as { hipotesis: Hipotesis[] }).hipotesis)
+      setFalt((h as { faltantes?: Faltante[] }).faltantes ?? [])
     } catch (e) { setError(apiErr(e, 'No se pudo cargar la validación.')) }
     finally { setLoading(false) }
   }, [])
   useEffect(() => { load() }, [load])
+
+  const descartarFaltante = async (f: Faltante) => {
+    setBusy(`f${f.id}`); setMsg('')
+    try {
+      await apiFetch(`/traduccion/faltantes/${f.id}/`, { method: 'PATCH', body: JSON.stringify({ estado: 'descartado' }) })
+      setFalt(x => x.filter(y => y.id !== f.id)); setMsg(`«${f.texto}» descartado de la lista de recolección.`)
+    } catch (e) { setMsg(apiErr(e, 'No se pudo descartar.')) }
+    finally { setBusy(null) }
+  }
 
   const revisar = async (c: Correccion, veredicto: 'aprobada' | 'rechazada') => {
     setBusy(c.id); setMsg('')
@@ -113,7 +127,15 @@ export default function ValidacionTab({ canEdit }: { canEdit: boolean }) {
               <div className="val-kpi"><b>{stats.pct_usuario_cambio_opcion ?? '—'}{stats.pct_usuario_cambio_opcion != null && '%'}</b><span>el usuario eligió otra opción</span></div>
               <div className="val-kpi"><b>{stats.correcciones.pendiente}</b><span>correcciones pendientes</span></div>
               <div className="val-kpi"><b>{stats.hipotesis_sin_validar}</b><span>hipótesis sin validar</span></div>
+              <div className="val-kpi"><b>{stats.faltantes_pendientes ?? 0}</b><span>palabras que faltan en el glosario</span></div>
             </div>
+            {stats.corpus_paralelo && (
+              <div className="val-paralelo" title="Audios etiquetados que además tienen traducción al español (pestaña Etiquetado). Es la base para un traductor de oraciones completas.">
+                <span>Corpus paralelo lengua ↔ español: <b>{stats.corpus_paralelo.total}</b> / {stats.corpus_paralelo.meta} frases</span>
+                <div className="val-paralelo-bar" aria-hidden="true"><div style={{ width: `${Math.min(100, 100 * stats.corpus_paralelo.total / stats.corpus_paralelo.meta)}%` }} /></div>
+                {Object.entries(stats.corpus_paralelo.por_comunidad).map(([c, n]) => <span key={c} className="gl-badge gl-badge--soft">{c}: {n}</span>)}
+              </div>
+            )}
             {stats.sin_coincidencia_frecuentes.length > 0 ? (
               <>
                 <h3>Lo que más se consulta y no está en el glosario</h3>
@@ -162,6 +184,25 @@ export default function ValidacionTab({ canEdit }: { canEdit: boolean }) {
             )}
           </article>
         ))}
+      </section>
+
+      <section className="gl-card val-sec" aria-labelledby="val-falt">
+        <h2 id="val-falt"><ListPlus size={18} aria-hidden="true" /> Palabras que la gente pide y no están en el glosario ({falt.length})</h2>
+        <p className="gl-help">Huecos de frases que el traductor armó por piezas. Cuando un hablante aporta el término (pestaña Glosario → agregar), la frase sale completa y el pendiente se cierra solo.</p>
+        {falt.length === 0 ? <p className="gl-help">No hay palabras faltantes registradas.</p> : (
+          <table className="gl-table val-table">
+            <thead><tr><th>Palabra</th><th>Lengua</th><th>Veces</th><th>Ejemplo de frase</th>{canEdit && <th></th>}</tr></thead>
+            <tbody>{falt.map(f => (
+              <tr key={f.id}>
+                <td><b>{f.texto}</b></td>
+                <td>{LENGUA_NOMBRE[f.lengua] ?? f.lengua_nombre}</td>
+                <td>{f.veces}</td>
+                <td className="val-falt-frase">{f.ejemplo_frase}</td>
+                {canEdit && <td className="val-td-actions"><button className="gl-btn gl-btn--ghost gl-btn--sm" disabled={busy === `f${f.id}`} onClick={() => descartarFaltante(f)} title="No es vocabulario que haga falta (descartar)"><X size={14} /></button></td>}
+              </tr>
+            ))}</tbody>
+          </table>
+        )}
       </section>
 
       <section className="gl-card val-sec" aria-labelledby="val-hip">

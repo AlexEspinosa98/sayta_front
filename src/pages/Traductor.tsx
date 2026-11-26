@@ -63,6 +63,14 @@ interface Verificacion {
   modelo: string | null
   ms: number
   piezas: { fragmento: string; equivalente: string; inicio?: number; fin?: number }[]
+  compuesta_honesta?: {
+    frase: string
+    segmentos: { texto: string; tipo: 'pieza' | 'hueco'; origen?: string; termino_lengua?: string; termino_es?: string; funcional?: boolean }[]
+    huecos: string[]
+    cobertura: number
+    completa: boolean
+    piezas_audio: string[]
+  } | null
 }
 
 interface TranscripcionResultado { termino: string; termino_es: string; definicion: string; probabilidad: number; confianza?: number; nivel?: string; fuente?: string; nota?: string; hipotesis?: boolean; mejor_coincidencia: boolean }
@@ -129,6 +137,66 @@ function EscucharEjemplo({ termino, lengua }: { termino: string; lengua: string 
   )
 }
 
+/** Voz por piezas reales: encadena las grabaciones de hablantes de cada pieza de la frase. */
+function EscucharFrase({ piezas, lengua }: { piezas: string[]; lengua: string }) {
+  const [estado, setEstado] = useState<'idle' | 'cargando' | 'sonando' | 'error'>('idle')
+  const [info, setInfo] = useState<{ con_audio: number; piezas: number; faltantes: string[] } | null>(null)
+  const clave = piezas.join('||')
+  useEffect(() => {
+    let vivo = true
+    setInfo(null)
+    if (!clave) return
+    apiFetch(`/traduccion/audio-frase/?lengua=${encodeURIComponent(lengua)}&piezas=${encodeURIComponent(clave)}`)
+      .then(d => { if (vivo) setInfo(d as { con_audio: number; piezas: number; faltantes: string[] }) })
+      .catch(() => { if (vivo) setInfo({ con_audio: 0, piezas: piezas.length, faltantes: piezas }) })
+    return () => { vivo = false }
+  }, [clave, lengua, piezas])
+  if (!clave || (info && info.con_audio === 0)) return null
+  const reproducir = async () => {
+    setEstado('cargando')
+    try {
+      const url = `${API_BASE}/traduccion/audio-frase/?archivo=1&lengua=${encodeURIComponent(lengua)}&piezas=${encodeURIComponent(clave)}`
+      const res = await fetch(url, { headers: authHeaders() })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const a = new Audio(URL.createObjectURL(await res.blob()))
+      a.onended = () => setEstado('idle')
+      setEstado('sonando')
+      await a.play()
+    } catch { setEstado('error'); setTimeout(() => setEstado('idle'), 2500) }
+  }
+  const parcial = info && info.con_audio < info.piezas
+  const titulo = parcial
+    ? `Voz real de hablantes para ${info.con_audio} de ${info.piezas} piezas; sin grabación: ${info.faltantes.join(', ')}`
+    : 'Grabaciones reales de hablantes de la comunidad, una por pieza, encadenadas. No es voz sintética.'
+  return (
+    <button type="button" className={`trx-escuchar trx-escuchar--frase ${estado}`} onClick={reproducir} disabled={estado === 'cargando' || estado === 'sonando'}
+      aria-label="Escuchar la frase con voz real de hablantes" title={titulo}>
+      {estado === 'cargando' ? <Loader2 size={14} className="spin" aria-hidden="true" /> : <Volume2 size={14} aria-hidden="true" />}
+      <span>{estado === 'error' ? 'No disponible' : estado === 'sonando' ? 'Sonando…' : `Escuchar frase${parcial && info ? ` (${info.con_audio}/${info.piezas})` : ''}`}</span>
+    </button>
+  )
+}
+
+/** Frase armada solo con piezas del glosario; lo que falta va entre corchetes y queda registrado como pendiente. */
+function FraseArmada({ c, lengua, direccion }: { c: NonNullable<Verificacion['compuesta_honesta']>; lengua: string; direccion: string }) {
+  const haciaLengua = direccion.startsWith('es')
+  return (
+    <div className="trx-armada" aria-label="Frase armada con el glosario">
+      <p className="trx-troceado-title">{c.completa ? 'Frase armada con el glosario' : 'Frase armada con lo que hay en el glosario'}
+        <span>{c.completa ? 'todas las palabras están en el glosario' : 'entre corchetes: palabras que aún no están en el glosario'}</span></p>
+      <p className="trx-armada-frase" lang={haciaLengua ? undefined : 'es'}>
+        {c.segmentos.map((s, i) => s.tipo === 'pieza'
+          ? <span key={i} className="trx-armada-pieza" title={`${s.origen} → ${s.texto}`}>{s.texto}</span>
+          : <span key={i} className={`trx-armada-hueco${s.funcional ? ' trx-armada-hueco--func' : ''}`} title={s.funcional ? 'palabra funcional del español; muchas veces no se traduce' : 'no está en el glosario'}>[{s.texto}]</span>)}
+        {c.piezas_audio.length > 0 && <EscucharFrase piezas={c.piezas_audio} lengua={lengua} />}
+      </p>
+      {c.huecos.length > 0 && (
+        <p className="trx-verif-exp">El sistema no inventa palabras en la lengua. «{c.huecos.join('», «')}» quedó registrado como pendiente para que la comunidad lo aporte; cuando se agregue al glosario, la frase saldrá completa.</p>
+      )}
+    </div>
+  )
+}
+
 function Troceado({ texto, piezas, sinTraducir }: { texto: string; piezas: Verificacion['piezas']; sinTraducir: string[] }) {
   const tokens = texto.trim().split(/\s+/)
   const cubierto = new Map<number, { equivalente: string; primero: boolean }>()
@@ -159,8 +227,10 @@ function Troceado({ texto, piezas, sinTraducir }: { texto: string; piezas: Verif
   )
 }
 
-function VerificacionPanel({ v, texto }: { v: Verificacion; texto: string }) {
+function VerificacionPanel({ v, texto, lengua, direccion }: { v: Verificacion; texto: string; lengua: string; direccion: string }) {
   const meta = VERIF_TXT[v.estado] ?? { titulo: v.estado, tono: 'off' as const }
+  // La frase armada se muestra cuando ninguna candidata cubrió todo el texto (o cuando el verificador compuso una)
+  const mostrarArmada = !!v.compuesta_honesta && !['confirmada', 'ajustada'].includes(v.estado)
   return (
     <section className={`trx-verif trx-verif--${meta.tono}`} aria-label="Verificación por agente">
       <div className="trx-verif-head">
@@ -168,10 +238,15 @@ function VerificacionPanel({ v, texto }: { v: Verificacion; texto: string }) {
         <strong>{meta.titulo}</strong>
         {v.confianza != null && <span className="trx-verif-conf">confianza {v.confianza}/100</span>}
       </div>
-      {v.traduccion_final && v.estado === 'compuesta' && <p className="trx-verif-final">{v.traduccion_final}</p>}
+      {v.traduccion_final && v.estado === 'compuesta' && (
+        <p className="trx-verif-final">{v.traduccion_final}
+          {v.compuesta_honesta && v.compuesta_honesta.piezas_audio.length > 0 && <EscucharFrase piezas={v.compuesta_honesta.piezas_audio} lengua={lengua} />}
+        </p>
+      )}
       {v.explicacion && <p className="trx-verif-exp">{v.explicacion}</p>}
-      {v.sin_traducir?.length > 0 && <p className="trx-verif-exp">Sin traducir: {v.sin_traducir.join(', ')}</p>}
-      {v.piezas?.length > 0 && <Troceado texto={texto} piezas={v.piezas} sinTraducir={v.sin_traducir} />}
+      {mostrarArmada && v.compuesta_honesta && <FraseArmada c={v.compuesta_honesta} lengua={lengua} direccion={direccion} />}
+      {v.sin_traducir?.length > 0 && !mostrarArmada && <p className="trx-verif-exp">Sin traducir: {v.sin_traducir.join(', ')}</p>}
+      {v.piezas?.length > 0 && <Troceado texto={texto} piezas={v.piezas} sinTraducir={mostrarArmada ? [] : v.sin_traducir} />}
       {v.modelo && <p className="trx-verif-meta">{v.modelo} · {(v.ms / 1000).toFixed(1)} s</p>}
     </section>
   )
@@ -738,7 +813,7 @@ export default function Traductor() {
           </div>
         )}
 
-        {result && !isLoading && result.verificacion && <VerificacionPanel v={result.verificacion} texto={result.texto_entrada} />}
+        {result && !isLoading && result.verificacion && <VerificacionPanel v={result.verificacion} texto={result.texto_entrada} lengua={result.lengua.codigo} direccion={direccion} />}
 
         {/* ── Otras coincidencias ─────────────────────────── */}
         {result && !isLoading && result.resultados.length > 1 && (

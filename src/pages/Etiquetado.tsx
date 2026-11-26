@@ -682,7 +682,7 @@ function ActividadModal({ community, session, onClose }: {
    AUDIO ROW  (HU-16 · HU-18 · HU-19 · HU-20)
 ═══════════════════════════════════════════════════════ */
 
-function AudioRow({ audio, community, session, onLabelChange, isExpanded, onToggle, glossaryCategories, canEtiquetar, autoria, onVerHistorial, hablante = '', hablantes = [], onHablanteChange }: {
+function AudioRow({ audio, community, session, onLabelChange, isExpanded, onToggle, glossaryCategories, canEtiquetar, autoria, onVerHistorial, hablante = '', hablantes = [], onHablanteChange, traduccionEs = '', onTraduccionChange }: {
   audio: AudioItem
   community: string
   session: string
@@ -696,6 +696,8 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
   hablante?: string
   hablantes?: string[]
   onHablanteChange?: (audio: string, hablante: string) => void
+  traduccionEs?: string
+  onTraduccionChange?: (audio: string, traduccion: string) => void
 }) {
   const [mode, setMode]         = useState<LabelMode>('idle')
   const [inputVal, setInputVal] = useState(audio.etiqueta ?? '')
@@ -713,6 +715,19 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
       await apiFetch(getGrabacionesPath(community, session, 'metadato', audio.nombre), { method: 'PUT', body: JSON.stringify({ hablante: v }) })
       onHablanteChange?.(audio.nombre, v); setHablanteEstado('ok'); setTimeout(() => setHablanteEstado(''), 1500)
     } catch { setHablanteEstado('error') }
+  }
+  // Traducción al español del audio: con la transcripción forma el corpus paralelo lengua ↔ español
+  const [tradVal, setTradVal] = useState(traduccionEs)
+  const [tradEstado, setTradEstado] = useState<'' | 'guardando' | 'ok' | 'error'>('')
+  useEffect(() => { setTradVal(traduccionEs) }, [traduccionEs])
+  const guardarTraduccion = async () => {
+    const v = tradVal.trim()
+    if (v === (traduccionEs ?? '')) return
+    setTradEstado('guardando')
+    try {
+      await apiFetch(getGrabacionesPath(community, session, 'metadato', audio.nombre), { method: 'PUT', body: JSON.stringify({ traduccion_es: v }) })
+      onTraduccionChange?.(audio.nombre, v); setTradEstado('ok'); setTimeout(() => setTradEstado(''), 1500)
+    } catch { setTradEstado('error') }
   }
   const [sug, setSug] = useState<{ estado: 'cargando' | 'ok' | 'error'; alternativas: string[]; elegida?: string; reordenada?: boolean; error?: string } | null>(null)
   const sugerirTranscripcion = async () => {
@@ -906,6 +921,15 @@ function AudioRow({ audio, community, session, onLabelChange, isExpanded, onTogg
                     <span className="eg-hablante-hint">Sirve para que la misma voz no quede repartida entre entrenamiento y evaluación.</span>
                   </div>
                 )}
+                {canEtiquetar && isLabeled && (
+                  <div className="eg-hablante-row eg-trad-row">
+                    <label htmlFor={`${inputId}-trad`}>Traducción al español</label>
+                    <textarea id={`${inputId}-trad`} className="eg-gate-input eg-trad-input" rows={2} placeholder="¿Qué dice este audio en español? (frase completa)"
+                      value={tradVal} onChange={e => setTradVal(e.target.value)} onBlur={guardarTraduccion} />
+                    <span className="eg-hablante-estado" aria-live="polite">{tradEstado === 'guardando' ? 'guardando…' : tradEstado === 'ok' ? '✓' : tradEstado === 'error' ? 'no se guardó' : ''}</span>
+                    <span className="eg-hablante-hint">Transcripción + traducción = corpus paralelo. Con ~2 000 frases se puede entrenar un traductor de oraciones completas.</span>
+                  </div>
+                )}
                 <div className="eg-kb-row">
                   <SpecialKeyboardToggle open={kb.open} onToggle={() => kb.open ? kb.setOpen(false) : kb.openKeyboard()} />
                   <button type="button" className="eg-btn eg-btn--ghost eg-btn--sug" onClick={sugerirTranscripcion} disabled={isBusy || sug?.estado === 'cargando'}
@@ -993,12 +1017,15 @@ function SessionWorkspace({ community, session, onBack, canEtiquetar }: {
     } catch { /* sin permiso o sin historial: no se muestra */ }
   }, [community, session, isAdmin])
 
-  const [metadatos, setMetadatos] = useState<Record<string, { hablante: string }>>({})
+  const [metadatos, setMetadatos] = useState<Record<string, { hablante?: string; traduccion_es?: string }>>({})
   const [hablantes, setHablantes] = useState<string[]>([])
   const actualizarHablante = useCallback((audioNombre: string, hablante: string) => {
     setMetadatos(m => ({ ...m, [audioNombre]: { ...(m[audioNombre] ?? {}), hablante } }))
     if (hablante && !hablantes.includes(hablante)) setHablantes(h => [...h, hablante].sort())
   }, [hablantes])
+  const actualizarTraduccion = useCallback((audioNombre: string, traduccion_es: string) => {
+    setMetadatos(m => ({ ...m, [audioNombre]: { ...(m[audioNombre] ?? {}), traduccion_es } }))
+  }, [])
 
   const fetchData = useCallback(async () => {
     setLoading(true); setError(null)
@@ -1008,7 +1035,7 @@ function SessionWorkspace({ community, session, onBack, canEtiquetar }: {
         apiFetch(getGrabacionesPath(community, session, 'metadatos')).catch(() => null),
         apiFetch(`/grabaciones/${encodeURIComponent(community)}/hablantes/`).catch(() => null),
       ]).then(([md, hb]) => {
-        if (md) setMetadatos(((md as { metadatos?: Record<string, { hablante: string }> }).metadatos) ?? {})
+        if (md) setMetadatos(((md as { metadatos?: Record<string, { hablante?: string; traduccion_es?: string }> }).metadatos) ?? {})
         if (hb) setHablantes(((hb as { hablantes?: { hablante: string }[] }).hablantes ?? []).map(x => x.hablante))
       })
       // Required: audio list
@@ -1157,6 +1184,8 @@ function SessionWorkspace({ community, session, onBack, canEtiquetar }: {
                     hablante={metadatos[a.nombre]?.hablante ?? ''}
                     hablantes={hablantes}
                     onHablanteChange={actualizarHablante}
+                    traduccionEs={metadatos[a.nombre]?.traduccion_es ?? ''}
+                    onTraduccionChange={actualizarTraduccion}
                     key={a.nombre}
                     audio={a}
                     community={community}

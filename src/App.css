@@ -3795,3 +3795,18 @@ a.contact-card .contact-card-icon { background: var(--blue); color: var(--white)
 .trx-sug-chip--exacta { border-color: #a7e3bd; background: #f0fbf4; }
 .trx-sug-chip--parcial { border-style: dashed; }
 .trx-live-text { margin: 10px 0 0; font-size: 17px; line-height: 1.35; color: var(--gray-900, #0f172a); background: rgba(255,255,255,.75); border-radius: 10px; padding: 8px 12px; max-width: 520px; }
+
+/* ── Frase armada con el glosario (composición honesta) y voz por piezas ── */
+.trx-armada { margin: 10px 0 0; padding: 10px 12px; border-radius: 10px; background: #fff; border: 1px dashed #cbd5e1; }
+.trx-armada-frase { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 4px 0 0; font-size: 19px; line-height: 1.35; }
+.trx-armada-pieza { font-weight: 600; color: var(--gray-900, #0f172a); border-bottom: 2px solid #86d3a8; }
+.trx-armada-hueco { color: #b45309; background: #fff7ed; border: 1px dashed #fdba74; border-radius: 6px; padding: 0 5px; font-size: 15px; }
+.trx-armada-hueco--func { color: var(--gray-500); background: #f8fafc; border-color: #e2e8f0; }
+.trx-escuchar--frase { margin-left: 6px; }
+.trx-escuchar.sonando { background: #e0f4f7; }
+.eg-trad-row { align-items: flex-start; }
+.eg-trad-input { flex: 1 1 320px; min-width: 240px; padding: 6px 10px; resize: vertical; font: inherit; font-size: 13.5px; }
+.val-falt-frase { color: var(--gray-500); font-size: 12px; }
+.val-paralelo { display: flex; align-items: center; gap: 10px; font-size: 13px; margin: 6px 0 0; }
+.val-paralelo-bar { flex: 1; height: 8px; background: #e2e8f0; border-radius: 999px; overflow: hidden; max-width: 320px; }
+.val-paralelo-bar div { height: 100%; background: var(--teal-dark); }
