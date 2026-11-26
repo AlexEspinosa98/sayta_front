@@ -177,6 +177,41 @@ function EscucharFrase({ piezas, lengua }: { piezas: string[]; lengua: string })
   )
 }
 
+/** Disponibilidad de la voz sintética por lengua (se consulta una vez por sesión de página). */
+let _ttsEstado: Promise<Record<string, { disponible: boolean }>> | null = null
+function ttsEstado() {
+  if (!_ttsEstado) _ttsEstado = apiFetch('/traduccion/sintetizar/?estado=1').then(d => d as Record<string, { disponible: boolean }>).catch(() => ({}))
+  return _ttsEstado
+}
+
+/** Voz sintética experimental: modelo entrenado con voces de la comunidad; lee cualquier texto en la lengua. */
+function EscucharSintetica({ texto, lengua }: { texto: string; lengua: string }) {
+  const [disp, setDisp] = useState(false)
+  const [estado, setEstado] = useState<'idle' | 'cargando' | 'sonando' | 'error'>('idle')
+  useEffect(() => { let vivo = true; ttsEstado().then(e => { if (vivo) setDisp(!!e[lengua.toLowerCase()]?.disponible || !!e[lengua]?.disponible) }); return () => { vivo = false } }, [lengua])
+  const limpio = texto.replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim()
+  if (!disp || !limpio) return null
+  const reproducir = async () => {
+    setEstado('cargando')
+    try {
+      const url = `${API_BASE}/traduccion/sintetizar/?lengua=${encodeURIComponent(lengua)}&texto=${encodeURIComponent(limpio)}`
+      const res = await fetch(url, { headers: authHeaders() })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const a = new Audio(URL.createObjectURL(await res.blob()))
+      a.onended = () => setEstado('idle')
+      setEstado('sonando')
+      await a.play()
+    } catch { setEstado('error'); setTimeout(() => setEstado('idle'), 2500) }
+  }
+  return (
+    <button type="button" className={`trx-escuchar trx-escuchar--sint ${estado}`} onClick={reproducir} disabled={estado === 'cargando' || estado === 'sonando'}
+      aria-label="Escuchar con voz sintética experimental" title="Voz sintética EXPERIMENTAL: modelo entrenado con grabaciones de hablantes de la comunidad. Puede pronunciar mal; no sustituye la voz real.">
+      {estado === 'cargando' ? <Loader2 size={14} className="spin" aria-hidden="true" /> : <Sparkles size={14} aria-hidden="true" />}
+      <span>{estado === 'error' ? 'No disponible' : estado === 'sonando' ? 'Sonando…' : 'Voz sintética (beta)'}</span>
+    </button>
+  )
+}
+
 /** Frase armada solo con piezas del glosario; lo que falta va entre corchetes y queda registrado como pendiente. */
 function FraseArmada({ c, lengua, direccion }: { c: NonNullable<Verificacion['compuesta_honesta']>; lengua: string; direccion: string }) {
   const haciaLengua = direccion.startsWith('es')
@@ -189,6 +224,7 @@ function FraseArmada({ c, lengua, direccion }: { c: NonNullable<Verificacion['co
           ? <span key={i} className="trx-armada-pieza" title={`${s.origen} → ${s.texto}`}>{s.texto}</span>
           : <span key={i} className={`trx-armada-hueco${s.funcional ? ' trx-armada-hueco--func' : ''}`} title={s.funcional ? 'palabra funcional del español; muchas veces no se traduce' : 'no está en el glosario'}>[{s.texto}]</span>)}
         {c.piezas_audio.length > 0 && <EscucharFrase piezas={c.piezas_audio} lengua={lengua} />}
+        {haciaLengua && c.completa && <EscucharSintetica texto={c.frase} lengua={lengua} />}
       </p>
       {c.huecos.length > 0 && (
         <p className="trx-verif-exp">El sistema no inventa palabras en la lengua. «{c.huecos.join('», «')}» quedó registrado como pendiente para que la comunidad lo aporte; cuando se agregue al glosario, la frase saldrá completa.</p>
@@ -241,6 +277,7 @@ function VerificacionPanel({ v, texto, lengua, direccion }: { v: Verificacion; t
       {v.traduccion_final && v.estado === 'compuesta' && (
         <p className="trx-verif-final">{v.traduccion_final}
           {v.compuesta_honesta && v.compuesta_honesta.piezas_audio.length > 0 && <EscucharFrase piezas={v.compuesta_honesta.piezas_audio} lengua={lengua} />}
+          {direccion.startsWith('es') && <EscucharSintetica texto={v.traduccion_final} lengua={lengua} />}
         </p>
       )}
       {v.explicacion && <p className="trx-verif-exp">{v.explicacion}</p>}
@@ -714,7 +751,8 @@ export default function Traductor() {
                   </div>
                 ) : selected ? (
                   <>
-                    <p className="trx-target-term">{targetPrimary}{selected.audio_ejemplo && result && <EscucharEjemplo termino={selected.termino} lengua={result.lengua.codigo} />}</p>
+                    <p className="trx-target-term">{targetPrimary}{selected.audio_ejemplo && result && <EscucharEjemplo termino={selected.termino} lengua={result.lengua.codigo} />}
+                      {result && direccion === 'es_a_lengua' && <EscucharSintetica texto={selected.termino} lengua={result.lengua.codigo} />}</p>
                     {targetSecondary && <p className="trx-target-es">{targetSecondary}</p>}
                     {selected.definicion && <p className="trx-target-def">{selected.definicion}</p>}
                   </>

@@ -3810,3 +3810,5 @@ a.contact-card .contact-card-icon { background: var(--blue); color: var(--white)
 .val-paralelo { display: flex; align-items: center; gap: 10px; font-size: 13px; margin: 6px 0 0; }
 .val-paralelo-bar { flex: 1; height: 8px; background: #e2e8f0; border-radius: 999px; overflow: hidden; max-width: 320px; }
 .val-paralelo-bar div { height: 100%; background: var(--teal-dark); }
+.trx-escuchar--sint { border-style: dashed; color: #6d28d9; border-color: #c4b5fd; }
+.trx-escuchar--sint:hover { background: #f5f3ff; }
